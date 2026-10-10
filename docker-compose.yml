@@ -1,0 +1,26 @@
+# Local dev services. Ports are bound to 127.0.0.1 only and differ from P01 (5433, 8000, 8501, 5678)
+# and P02 (5434, 6380, 8001, 8502). P03: Postgres 5435, API 8003, UI 8503. No Redis in v1 (ADR 005).
+services:
+  postgres:
+    image: postgres:16            # already on this machine; P03 needs no extensions
+    environment:
+      POSTGRES_USER: postgres     # bootstrap superuser: used only by the init script, never by the app
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: p03
+      P03_MIGRATOR_PASSWORD: ${P03_MIGRATOR_PASSWORD}
+      P03_APP_PASSWORD: ${P03_APP_PASSWORD}
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-5435}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
+    # Small machine shared with P02: cap memory so a runaway query can't starve the laptop.
+    mem_limit: 512m
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d p03"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  pgdata:
