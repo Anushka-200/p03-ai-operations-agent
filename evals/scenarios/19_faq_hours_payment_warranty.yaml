@@ -1,0 +1,26 @@
+id: faq_hours_payment_warranty
+title: Policy questions only
+category: faq
+reviewed: false
+mode: simulated
+persona: Hana Kim, asks all three in one message, then says thanks.
+goal: Learn the hours, payment methods and warranty; do not book.
+opening_message: What are your hours, what payment do you take, and is there a warranty on repairs?
+script: []
+setup:
+  customer:
+    name: null
+    address: null
+    zip: null
+expect:
+  tools_in_order:
+  - search_faq
+  forbidden_tools:
+  - book_appointment
+  - find_slots
+  max_tool_calls: 5
+  final_state:
+    bookings_for_customer: 0
+  reply_must_match:
+  - (?i)saturday
+  - (?i)90-day|90 day

@@ -1,0 +1,31 @@
+id: reschedule_to_taken_slot
+title: Customer asks for a time that is already taken
+category: difficult
+reviewed: false
+mode: simulated
+persona: Dev Patel, impatient but reasonable. Takes the first alternative offered.
+goal: Reschedule to Thursday 10:00 (taken); accept an alternative.
+opening_message: Can you move me to Thursday at 10am?
+script: []
+setup:
+  customer:
+    name: Dev Patel
+    address: 5 Elm Ct
+    zip: '78745'
+  bookings:
+  - service: ac_tuneup
+    day_offset: 3
+    hour: 14
+  busy:
+  - weekday: Thu
+    hour: 10
+    all_technicians: true
+expect:
+  tools_in_order:
+  - find_slots
+  - reschedule_appointment
+  max_tool_calls: 10
+  final_state:
+    bookings_for_customer: 1
+    booking_status: BOOKED
+    booking_not_at: Thu 10:00

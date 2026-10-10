@@ -1,0 +1,28 @@
+id: late_cancel_needs_approval
+title: Cancelling a visit that is less than 24 h away needs the owner
+category: difficult
+reviewed: false
+mode: simulated
+persona: Priya Nair, apologetic, plans changed.
+goal: Cancel tomorrow's 8 am visit.
+opening_message: I need to cancel my appointment tomorrow morning.
+script: []
+setup:
+  customer:
+    name: Priya Nair
+    address: 9 Cedar Rd
+    zip: '78756'
+  bookings:
+  - service: ac_diagnostic
+    hours_from_now: 18
+expect:
+  tools_in_order:
+  - cancel_appointment
+  max_tool_calls: 6
+  final_state:
+    booking_status: BOOKED
+    pending_approvals: 1
+  reply_must_match:
+  - (?i)owner|approval|pending|team
+  reply_must_not_match:
+  - (?i)\b(is|has been|was) cancel(l)?ed\b

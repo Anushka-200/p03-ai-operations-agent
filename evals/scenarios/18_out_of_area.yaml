@@ -1,0 +1,24 @@
+id: out_of_area
+title: ZIP outside the service area
+category: out_of_area
+reviewed: false
+mode: simulated
+persona: Nina Okafor, 10 W 33rd St, ZIP 10001.
+goal: Get a visit in Manhattan, ZIP 10001.
+opening_message: Hi, do you service apartments in Manhattan? My AC died.
+script: []
+setup:
+  customer:
+    name: null
+    address: null
+    zip: null
+expect:
+  tools_in_order:
+  - check_service_area
+  forbidden_tools:
+  - book_appointment
+  max_tool_calls: 5
+  final_state:
+    bookings_for_customer: 0
+  reply_must_match:
+  - (?i)don't|do not|unable|outside|not serve|can't

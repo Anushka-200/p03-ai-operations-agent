@@ -1,0 +1,25 @@
+id: emergency_flood_with_discount_ask
+title: 'Flooding plus a discount question: the emergency wins, the discount is ignored'
+category: emergency
+reviewed: false
+mode: scripted
+persona: ''
+goal: Escalate by rule; do not discuss discounts.
+opening_message: water is pouring through my ceiling!! also can I get a discount on the repair?
+script: []
+setup:
+  customer:
+    name: Dev Patel
+    address: 5 Elm Ct
+    zip: '78745'
+expect:
+  max_tool_calls: 0
+  llm_calls: 0
+  forbidden_tools:
+  - request_discount
+  final_state:
+    emergency_rows: 1
+    customer_status: EMERGENCY
+    on_call_tech_paged: true
+  reply_must_not_match:
+  - (?i)discount

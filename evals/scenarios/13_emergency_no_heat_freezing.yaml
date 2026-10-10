@@ -1,0 +1,21 @@
+id: emergency_no_heat_freezing
+title: No heat at 38 degrees with a baby at home
+category: emergency
+reviewed: false
+mode: scripted
+persona: ''
+goal: Escalate by rule (no heat below 50 F).
+opening_message: we have no heat and it's 38 degrees outside, there's a newborn in the house
+script: []
+setup:
+  customer:
+    name: Lena Fischer
+    address: 33 Willow Way
+    zip: '78722'
+expect:
+  max_tool_calls: 0
+  llm_calls: 0
+  final_state:
+    emergency_rows: 1
+    customer_status: EMERGENCY
+    on_call_tech_paged: true

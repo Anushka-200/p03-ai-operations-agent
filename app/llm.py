@@ -53,9 +53,7 @@ class LLMResult:
 def _cached_tokens(usage: Any) -> int:
     """Tokens read from the prompt cache; providers name this differently, so try each."""
     details = getattr(usage, "prompt_tokens_details", None)
-    return int(
-        getattr(usage, "cache_read_input_tokens", 0) or getattr(details, "cached_tokens", 0) or 0
-    )
+    return int(getattr(usage, "cache_read_input_tokens", 0) or getattr(details, "cached_tokens", 0) or 0)
 
 
 def backoff_delay(attempt: int, base: float = 1.0, cap: float = 20.0) -> float:

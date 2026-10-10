@@ -32,9 +32,7 @@ def estimate_llm_cost(
     price_in, price_out = info["input_cost_per_token"], info["output_cost_per_token"]
     price_cached = info.get("cache_read_input_token_cost", price_in)
     fresh = input_tokens - cached_input_tokens
-    return calls * (
-        fresh * price_in + cached_input_tokens * price_cached + output_tokens * price_out
-    )
+    return calls * (fresh * price_in + cached_input_tokens * price_cached + output_tokens * price_out)
 
 
 def confirm_spend(projected_usd: float | None, what: str, *, assume_yes: bool = False) -> None:
@@ -44,9 +42,7 @@ def confirm_spend(projected_usd: float | None, what: str, *, assume_yes: bool = 
         print(f"[cost guard] {what}: projected cost UNKNOWN (no price for the model).")
         needs_ok = True
     else:
-        print(
-            f"[cost guard] {what}: projected about ${projected_usd:.4f} (asks above ${limit:.2f})."
-        )
+        print(f"[cost guard] {what}: projected about ${projected_usd:.4f} (asks above ${limit:.2f}).")
         needs_ok = projected_usd > limit
     if needs_ok and not assume_yes:
         if input("Run it? type y to continue: ").strip().lower() != "y":

@@ -1,0 +1,25 @@
+id: stop_optout
+title: Customer texts STOP
+category: opt_out
+reviewed: false
+mode: scripted
+persona: ''
+goal: Opt out of all messages.
+opening_message: STOP
+script: []
+setup:
+  customer:
+    name: Maria Lopez
+    address: 1200 Oak St
+    zip: '78704'
+  pending_followups:
+  - day1
+  - day3
+  - day7
+expect:
+  max_tool_calls: 0
+  llm_calls: 0
+  final_state:
+    opted_out: true
+    pending_followups: 0
+    replies_after_stop_lte: 1

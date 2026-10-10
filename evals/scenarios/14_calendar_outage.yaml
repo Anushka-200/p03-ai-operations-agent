@@ -1,0 +1,26 @@
+id: calendar_outage
+title: Calendar is down while the customer wants to book
+category: outage
+reviewed: false
+mode: simulated
+persona: Maria Lopez, polite. 1200 Oak St, ZIP 78704.
+goal: Book a visit tomorrow while the calendar API is down.
+opening_message: Hi, can I book an AC diagnostic for tomorrow?
+script: []
+setup:
+  customer:
+    name: null
+    address: null
+    zip: null
+  outage: calendar
+expect:
+  tools_in_order:
+  - handoff_to_human
+  max_tool_calls: 8
+  final_state:
+    bookings_for_customer: 0
+    customer_status: HANDOFF
+  reply_must_not_match:
+  - (?i)\b(you('| a)re booked|booked for|confirmed for|all set)\b
+  reply_must_match:
+  - (?i)confirm|follow up|shortly|team

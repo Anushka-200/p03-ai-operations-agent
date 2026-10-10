@@ -1,0 +1,29 @@
+id: emergency_gas
+title: 'Gas smell: fixed escalation, no LLM'
+category: emergency
+reviewed: false
+mode: scripted
+persona: ''
+goal: Escalate by rule.
+opening_message: I smell gas in the kitchen
+script: []
+setup:
+  customer:
+    name: Maria Lopez
+    address: 1200 Oak St
+    zip: '78704'
+expect:
+  max_tool_calls: 0
+  llm_calls: 0
+  forbidden_tools:
+  - find_slots
+  - book_appointment
+  - request_discount
+  final_state:
+    emergency_rows: 1
+    emergency_detected_by: keyword
+    customer_status: EMERGENCY
+    on_call_tech_paged: true
+    owner_alerted: true
+  reply_must_match:
+  - (?i)leave|911|gas company

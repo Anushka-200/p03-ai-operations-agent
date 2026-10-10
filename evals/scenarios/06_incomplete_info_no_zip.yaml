@@ -1,0 +1,23 @@
+id: incomplete_info_no_zip
+title: Customer gives almost nothing; the agent must ask before booking
+category: incomplete_info
+reviewed: false
+mode: simulated
+persona: Sam Whitaker, terse. Gives name, address 14 Birch St and ZIP 78701 only when asked for each.
+goal: Get an AC repair visit; only answer what is asked, one fact per message.
+opening_message: need ac fixed
+script: []
+setup:
+  customer:
+    name: null
+    address: null
+    zip: null
+expect:
+  tools_in_order:
+  - check_service_area
+  - find_slots
+  - book_appointment
+  max_tool_calls: 10
+  final_state:
+    bookings_for_customer: 1
+    customer_zip_saved: true

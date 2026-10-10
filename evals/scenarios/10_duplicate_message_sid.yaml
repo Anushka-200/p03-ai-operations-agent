@@ -1,0 +1,21 @@
+id: duplicate_message_sid
+title: Twilio delivers the same text twice
+category: duplicate
+reviewed: false
+mode: scripted
+persona: ''
+goal: The same booking request arrives twice with one MessageSid; handle it once.
+opening_message: Book me an AC diagnostic tomorrow please, 1200 Oak St 78704, name Maria Lopez
+script: []
+setup:
+  customer:
+    name: null
+    address: null
+    zip: null
+  deliver_twice: true
+expect:
+  max_tool_calls: 8
+  final_state:
+    inbound_rows_for_sid: 1
+    bookings_for_customer_lte: 1
+    replies_sent_lte: 1

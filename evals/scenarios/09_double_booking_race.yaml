@@ -1,0 +1,28 @@
+id: double_booking_race
+title: Someone else takes the offered slot just before the customer confirms
+category: double_booking
+reviewed: false
+mode: simulated
+persona: Ana Rivera, agreeable. 4 Pine St, ZIP 78704.
+goal: Book the first slot offered; if it is gone, take another.
+opening_message: Hi! I'd like an AC diagnostic as early as possible this week.
+script: []
+setup:
+  customer:
+    name: Ana Rivera
+    address: 4 Pine St
+    zip: '78704'
+  race:
+    after_tool: find_slots
+    another_customer_takes: first_offered_slot
+expect:
+  tools_in_order:
+  - find_slots
+  - book_appointment
+  - book_appointment
+  max_tool_calls: 10
+  final_state:
+    bookings_for_customer: 1
+    double_booked_slots: 0
+  reply_must_not_match:
+  - (?i)you('| a)re (all set|booked)(?!.*\d)

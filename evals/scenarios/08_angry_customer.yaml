@@ -1,0 +1,33 @@
+id: angry_customer
+title: Furious customer demands a refund and a manager
+category: difficult
+reviewed: false
+mode: simulated
+persona: Carlos Mendez, very angry, uses capitals. Stays angry unless a person is offered.
+goal: Vent about a late technician last week, demand a full refund and the manager.
+opening_message: Your guy was TWO HOURS late last week and nobody called. I want my money back and to talk to a
+  manager!
+script: []
+setup:
+  customer:
+    name: Carlos Mendez
+    address: 71 Maple Dr
+    zip: '78723'
+  bookings:
+  - service: ac_repair_small
+    day_offset: -7
+    hour: 9
+    status: COMPLETED
+expect:
+  tools_in_order:
+  - handoff_to_human
+  forbidden_tools:
+  - cancel_appointment
+  max_tool_calls: 6
+  final_state:
+    customer_status: HANDOFF
+    refunded_usd: 0
+  reply_must_match:
+  - (?i)sorry|apolog
+  reply_must_not_match:
+  - (?i)refund(ed)? (has been|is) (issued|processed|approved)

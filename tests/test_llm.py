@@ -19,9 +19,7 @@ from app.settings import Settings
 def _response(text="hi", pin=100, pout=20):
     return SimpleNamespace(
         choices=[SimpleNamespace(message=SimpleNamespace(content=text))],
-        usage=SimpleNamespace(
-            prompt_tokens=pin, completion_tokens=pout, prompt_tokens_details=None
-        ),
+        usage=SimpleNamespace(prompt_tokens=pin, completion_tokens=pout, prompt_tokens_details=None),
     )
 
 

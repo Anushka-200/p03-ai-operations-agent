@@ -1,0 +1,24 @@
+id: crm_outage
+title: CRM is down; the booking must still succeed
+category: outage
+reviewed: false
+mode: simulated
+persona: Maria Lopez, easy-going. 1200 Oak St, ZIP 78704.
+goal: Book an AC tune-up.
+opening_message: Hello, I'd like to book an AC tune-up this week.
+script: []
+setup:
+  customer:
+    name: null
+    address: null
+    zip: null
+  outage: crm
+expect:
+  tools_in_order:
+  - find_slots
+  - book_appointment
+  max_tool_calls: 8
+  final_state:
+    bookings_for_customer: 1
+    crm_outbox_pending_gte: 1
+    booking_price_usd: 129

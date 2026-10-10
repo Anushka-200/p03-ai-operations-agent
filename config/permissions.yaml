@@ -1,0 +1,36 @@
+# Who may call which tool. ONE file, read by ONE function (app/gate.py) that every call passes through:
+# the agent, the MCP server and the scheduler. Missing role or tool = forbidden.
+#
+# level: auto      -> runs now
+#        approval  -> the owner must tap Approve first (a row in `approvals`)
+#        forbidden -> never runs
+# rules: extra checks that can tighten a level (implemented in app/gate.py)
+
+limits:
+  discount_cap_pct: 15        # above this a discount is refused outright; at or below it needs approval
+  late_change_hours: 24       # reschedule/cancel closer than this to the visit needs approval
+  max_active_bookings: 2      # per customer
+
+tools:
+  # --- read-only helpers ---
+  list_services:      {customer: auto, owner: auto}
+  get_price:          {customer: auto, owner: auto}
+  check_service_area: {customer: auto, owner: auto}
+  search_faq:         {customer: auto, owner: auto}
+  find_slots:         {customer: auto, owner: auto}
+  # --- the customer's own record (scope comes from the verified phone, never from arguments) ---
+  get_my_profile:     {customer: auto}
+  update_my_contact:  {customer: auto}
+  # --- bookings ---
+  book_appointment:       {customer: {level: auto, rules: [max_active_bookings]}}   # owners do not book on a customer's behalf here
+  reschedule_appointment: {customer: {level: auto, rules: [late_change]}, owner: auto}
+  cancel_appointment:     {customer: {level: auto, rules: [late_change]}, owner: auto}
+  # --- money: never automatic for customers ---
+  request_discount:   {customer: {level: approval, rules: [discount_cap]}, owner: approval}
+  request_refund:     {customer: approval, owner: approval}
+  handoff_to_human:   {customer: auto}
+  # --- owner assistant ---
+  list_leads:             {owner: auto}
+  list_jobs:              {owner: auto}
+  draft_bulk_followup:    {owner: auto}
+  send_bulk_followup:     {owner: approval}

@@ -7,8 +7,11 @@ requires-python = ">=3.12"
 dependencies = [
     "langfuse>=4.17.0",
     "litellm>=1.104.2",
+    "mcp>=2.3.0",
     "psycopg[binary]>=3.3.6",
     "pydantic-settings>=2.15.0",
+    "pyyaml>=6.0.3",
+    "tzdata>=2026.5",
 ]
 
 [dependency-groups]
@@ -19,10 +22,13 @@ dev = [
 ]
 
 [tool.ruff]
-line-length = 100
+line-length = 110  # SQL and the sentences we send to the model are long on purpose
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP"]
+# E501 (line length) is off: SQL and the sentences we send to the model are long on purpose.
+# The formatter still wraps all code at 110.
+ignore = ["E501"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["E501"]  # SQL and message strings in tests

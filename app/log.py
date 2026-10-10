@@ -4,7 +4,7 @@ import json
 import logging
 import sys
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, TextIO
 
 from app.privacy import redact_phones
 from app.settings import get_settings
@@ -30,8 +30,9 @@ class JsonFormatter(logging.Formatter):
         return '{"ts": "' + ts + '", ' + body[1:]
 
 
-def setup_logging() -> None:
-    handler = logging.StreamHandler(sys.stdout)
+def setup_logging(stream: TextIO | None = None) -> None:
+    """Log JSON lines to stdout. The MCP server passes stderr: its stdout is the protocol channel."""
+    handler = logging.StreamHandler(stream or sys.stdout)
     handler.setFormatter(JsonFormatter())
     root = logging.getLogger()
     root.handlers[:] = [handler]

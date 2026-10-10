@@ -1,0 +1,24 @@
+id: incomplete_vague_problem
+title: Vague problem description; the agent must clarify the service
+category: incomplete_info
+reviewed: false
+mode: simulated
+persona: Lena Fischer, unsure what is wrong. 33 Willow Way, ZIP 78722. Says the heater seems to blow cool air.
+goal: Something is wrong with the house temperature; it is actually the furnace blowing cold air.
+opening_message: something's weird with the temperature in my house lately
+script: []
+setup:
+  customer:
+    name: null
+    address: null
+    zip: null
+expect:
+  tools_in_order:
+  - find_slots
+  - book_appointment
+  max_tool_calls: 10
+  final_state:
+    bookings_for_customer: 1
+    booking_service_in:
+    - furnace_diagnostic
+    - ac_diagnostic

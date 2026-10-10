@@ -20,7 +20,7 @@ Start time: 20:05 (2026-10-09). Owner's phase-level estimate: M 1 h (O/P not giv
 | | **Phase total (+15% debugging buffer)** | | | | | | | | | | | | | |
 
 ## Phase 1: Tools + permission gate + MCP
-Start time: 
+Start time: 15:49 (2026-10-10). Owner's phase-level estimate: M 1 h ("complete the phase in the next hour"; O/P not given). Build order: 1.2-1.8 and 1.11 straight through; stop for 1.9/1.10 (needs the owner at the keyboard, Claude Desktop on Windows).
 
 | # | Task | Category | Familiarity | O | M | P | PERT | x mult | Planned h | Learning h | Build h | Actual total h | Ratio | Why it was off |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
@@ -131,3 +131,6 @@ Start time:
 | 0.4 (accounts) | n/a | n/a | done by owner (workspace, key, Langfuse project); no times given; my part (model IDs + prices) verified 2026-10-09: haiku-5-5 $0.10/$0.50, sonnet-5-5 $2/$10, opus-5-5 $4/$20 per 1M tokens, LiteLLM 1.104.2 knows all three |
 | 0.5 + 0.6 (LLM wrapper, cost guard, tracing, live run + fix) | ~22:33 (owner said go right after stating the 22:33 end of the earlier block; approximate) | | built and run live at $0.000021; end only when owner says (system clock was 22:47 when the last check finished) |
 | Day 1 stop | | | owner stopped for the day at ~23:31 IST (system clock). No end times logged for 0.5/0.6 (owner has not stated them); resume tomorrow with: Phase 0 close-out hours, quiz answers for 0.5/0.6, commit decision, then Phase 1 |
+| Phase 0 | 2026-10-09 20:05 | 2026-10-10 15:49 | END stated by owner. Wall-clock spans a night and a day; actual learning/build hours still to be given at close-out |
+| Phase 1 | 2026-10-10 15:49 | 18:01 (2026-10-10) | END stated by owner; estimate was 1 h for the phase (elapsed 2 h 12 min incl. explanations, Q&A and Claude Desktop setup); 1.9/1.10 live run done, close-out hours still to collect |
+| 1.2-1.8 + 1.11 (tools, fakes, gate, audit, approvals, MCP server, 22 scenario drafts) | 2026-10-10 15:49 | | built straight through; stopped for 1.9/1.10 (owner at keyboard) at ~16:07 IST system clock; end only when owner says |

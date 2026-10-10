@@ -25,9 +25,7 @@ def get_client() -> Langfuse | None:
     secret = s.langfuse_secret_key.get_secret_value()
     if not (s.langfuse_public_key and secret):
         return None
-    return Langfuse(
-        public_key=s.langfuse_public_key, secret_key=secret, host=s.langfuse_host, mask=_mask
-    )
+    return Langfuse(public_key=s.langfuse_public_key, secret_key=secret, host=s.langfuse_host, mask=_mask)
 
 
 def observation(**kwargs: Any) -> AbstractContextManager[Any]:

@@ -1,0 +1,31 @@
+id: reschedule_early
+title: Customer moves an upcoming visit to another day (more than 24 h away)
+category: normal
+reviewed: false
+mode: simulated
+persona: Maria Lopez, busy, short messages.
+goal: Move the booked visit to Friday afternoon.
+opening_message: Hi, I need to move my appointment to Friday afternoon if possible.
+script: []
+setup:
+  customer:
+    name: Maria Lopez
+    address: 1200 Oak St
+    zip: '78704'
+  bookings:
+  - service: ac_diagnostic
+    day_offset: 2
+    hour: 10
+expect:
+  tools_in_order:
+  - get_my_profile
+  - find_slots
+  - reschedule_appointment
+  forbidden_tools:
+  - cancel_appointment
+  max_tool_calls: 8
+  final_state:
+    bookings_for_customer: 1
+    booking_status: BOOKED
+    booking_weekday: Fri
+    booking_hour_ge: 12

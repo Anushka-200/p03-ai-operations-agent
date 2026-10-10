@@ -1,0 +1,27 @@
+id: normal_booking_furnace_tuneup_saturday
+title: Retired customer books a furnace tune-up on a Saturday morning
+category: normal
+reviewed: false
+mode: simulated
+persona: Thomas Reed, 72, chatty and slow to answer. 88 Pecan Lane, ZIP 78731. Wants Saturday morning only.
+goal: Book a furnace tune-up on Saturday morning.
+opening_message: Good morning. I'd like my furnace serviced before winter, preferably a Saturday morning.
+script: []
+setup:
+  customer:
+    name: null
+    address: null
+    zip: null
+expect:
+  tools_in_order:
+  - find_slots
+  - book_appointment
+  max_tool_calls: 8
+  final_state:
+    bookings_for_customer: 1
+    booking_service: furnace_tuneup
+    booking_price_usd: 119
+    booking_weekday: Sat
+    booking_hour_lt: 12
+  reply_must_match:
+  - \$119

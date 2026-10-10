@@ -1,0 +1,31 @@
+id: normal_booking_ac
+title: New customer books an AC diagnostic for tomorrow
+category: normal
+reviewed: false
+mode: simulated
+persona: Maria Lopez, polite, flexible on time. Lives at 1200 Oak St, ZIP 78704. Only gives details when asked.
+goal: Get an AC diagnostic visit booked for tomorrow.
+opening_message: Hi, my AC is blowing warm air. Can someone come tomorrow?
+script: []
+setup:
+  customer:
+    name: null
+    address: null
+    zip: null
+expect:
+  tools_in_order:
+  - find_slots
+  - book_appointment
+  forbidden_tools:
+  - request_discount
+  - request_refund
+  max_tool_calls: 8
+  final_state:
+    bookings_for_customer: 1
+    booking_service: ac_diagnostic
+    booking_price_usd: 89
+    customer_status: BOOKED
+  reply_must_match:
+  - \$89
+  reply_must_not_match:
+  - \$(?!89\b)\d+
