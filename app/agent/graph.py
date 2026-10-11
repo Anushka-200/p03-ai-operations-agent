@@ -14,7 +14,6 @@ for the owner) loses nothing. Everything with side effects goes through `run_too
 
 import json
 import logging
-import operator
 from typing import Annotated, Any, TypedDict
 
 from langgraph.graph import END, START, StateGraph
@@ -33,8 +32,21 @@ HANDOFF_TEXT = (
 LLM_DOWN_TEXT = "Sorry, I'm having trouble right now. A team member will text you back shortly."
 
 
+REPLACE = "__replace__"
+
+
+def add_messages(left: list[dict[str, Any]], right: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """How new messages join the history. Normally they are appended. If the update starts with a
+    {"role": "__replace__"} marker, the history is REPLACED by the rest (that is how compaction
+    shortens it). The marker itself is never stored."""
+    if right and right[0].get("role") == REPLACE:
+        return list(right[1:])
+    return left + right
+
+
 class State(TypedDict, total=False):
-    messages: Annotated[list[dict[str, Any]], operator.add]  # the conversation (OpenAI-shaped dicts)
+    messages: Annotated[list[dict[str, Any]], add_messages]  # the conversation (OpenAI-shaped dicts)
+    summary: str  # compacted memory of the turns that were dropped from `messages`
     # per message (reset by the input of each turn)
     turn_tool_calls: int
     reply: str | None
@@ -93,12 +105,61 @@ def _over_caps(state: State, ctx: ToolContext, adding: int = 0) -> str | None:
     return None
 
 
+def estimate_tokens(messages: list[dict[str, Any]]) -> int:
+    """Rough size of the history: about 4 characters per token. Good enough to decide WHEN to compact."""
+    return len(json.dumps(messages, default=str)) // 4
+
+
+def _render(messages: list[dict[str, Any]]) -> str:
+    lines = []
+    for m in messages:
+        if m["role"] == "assistant" and m.get("tool_calls"):
+            for t in m["tool_calls"]:
+                lines.append(f"assistant called {t['function']['name']}({t['function']['arguments'][:300]})")
+        elif m["role"] == "tool":
+            lines.append(f"tool result: {str(m['content'])[:700]}")
+        else:
+            lines.append(f"{'customer' if m['role'] == 'user' else m['role']}: {str(m['content'])[:800]}")
+    return "\n".join(lines)
+
+
+def compact_node(state: State, config) -> dict[str, Any]:
+    """If the history is long, summarise the old part and keep the last few customer turns verbatim.
+
+    Why: every model call resends the whole history, so long chats cost more and bury the facts.
+    Safe by construction: it cuts only at a customer message (a tool call and its result are never
+    separated), and if the summary call fails the history is simply left alone."""
+    c = _cfg(config)
+    ctx, llm = c["ctx"], c["llm"]
+    s = ctx.settings
+    msgs = state.get("messages", [])
+    if not s.agent_compaction_enabled or estimate_tokens(msgs) <= s.agent_compact_above_tokens:
+        return {}
+    users = [i for i, m in enumerate(msgs) if m.get("role") == "user"]
+    if len(users) <= s.agent_compact_keep_turns:
+        return {}
+    cut = users[-s.agent_compact_keep_turns]
+    old, tail = msgs[:cut], msgs[cut:]
+    previous = state.get("summary", "")
+    try:
+        res = llm(
+            [{"role": "system", "content": prompts.COMPACT_PROMPT},
+             {"role": "user", "content": (f"Previous memory:\n{previous}\n\n" if previous else "") + "New conversation part:\n" + _render(old)}],
+            name="compaction", max_tokens=600, settings=s,
+        )  # fmt: skip
+    except LLMError:
+        logger.warning("compaction failed; keeping the full history")
+        return {}
+    logger.info("compacted history", extra={"dropped_messages": len(old), "kept_messages": len(tail)})
+    return {"summary": res.text.strip(), "messages": [{"role": REPLACE}, *tail], **_spent(state, res)}
+
+
 def agent_node(state: State, config) -> dict[str, Any]:
     c = _cfg(config)
     ctx, caller, llm = c["ctx"], c["caller"], c["llm"]
     if (why := _over_caps(state, ctx)) is not None:
         return {"handoff_reason": why}
-    system = prompts.system_prompt(ctx.now(), _profile(ctx, caller))
+    system = prompts.system_prompt(ctx.now(), _profile(ctx, caller), state.get("summary", ""))
     try:
         res = llm(
             [{"role": "system", "content": system}, *state["messages"]],
@@ -178,7 +239,7 @@ def guard_node(state: State, config) -> dict[str, Any]:
         logger.warning("output guard blocked a reply", extra={"problem": problem, "draft_preview": text[:160]})
         try:  # one repair attempt, then a safe fallback: never loop on a misbehaving model
             res = llm(
-                [{"role": "system", "content": prompts.system_prompt(ctx.now(), _profile(ctx, c["caller"]))},
+                [{"role": "system", "content": prompts.system_prompt(ctx.now(), _profile(ctx, c["caller"]), state.get("summary", ""))},
                  *state["messages"],
                  {"role": "user", "content": f"[system] Your draft was blocked because {problem} Rewrite the reply to the customer now."}],
                 name="agent-repair", max_tokens=ctx.settings.agent_max_output_tokens, settings=ctx.settings,
@@ -240,12 +301,14 @@ def handoff_node(state: State, config) -> dict[str, Any]:
 
 def build_graph(checkpointer):
     g = StateGraph(State)
+    g.add_node("compact", compact_node)
     g.add_node("agent", agent_node)
     g.add_node("tools", tools_node)
     g.add_node("guard", guard_node)
     g.add_node("approval_wait", approval_wait_node)
     g.add_node("handoff", handoff_node)
-    g.add_edge(START, "agent")
+    g.add_edge(START, "compact")
+    g.add_edge("compact", "agent")
     g.add_conditional_edges("agent", after_agent, {"tools": "tools", "guard": "guard", "handoff": "handoff"})
     g.add_conditional_edges("tools", lambda s: "agent", {"agent": "agent"})
     g.add_conditional_edges("guard", after_guard, {"approval_wait": "approval_wait", "handoff": "handoff", "end": END})
