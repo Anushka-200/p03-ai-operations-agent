@@ -7,7 +7,7 @@ import psycopg.errors
 from psycopg.types.json import Jsonb
 from pydantic import Field
 
-from app import crm_sync
+from app import crm_sync, followups
 from app.adapters.ports import AdapterUnavailable
 from app.availability import (
     BUSINESS_TZ,
@@ -157,6 +157,7 @@ def book_appointment(ctx: ToolContext, caller: Caller, a: BookArgs) -> dict[str,
         "UPDATE followups SET status = 'CANCELLED' WHERE customer_id = %s AND status = 'PENDING'",
         (caller.customer_id,),
     )
+    followups.schedule_reminder(ctx, caller.customer_id, booking_id, start)  # type: ignore[arg-type]
     crm_sync.enqueue(ctx, caller.customer_id, "upsert_deal", {"booking_id": booking_id})  # type: ignore[arg-type]
 
     result = {"ok": True, **booking_summary(load_booking(ctx, caller, booking_id))}
@@ -215,6 +216,7 @@ def reschedule_appointment(ctx: ToolContext, caller: Caller, a: RescheduleArgs) 
             "calendar_unavailable", "The calendar is not responding. Call handoff_to_human."
         ) from exc
     ctx.conn.execute("UPDATE bookings SET calendar_event_id = %s WHERE id = %s", (event_id, b["id"]))
+    followups.schedule_reminder(ctx, b["customer_id"], b["id"], start)  # moves the reminder to the new time
     result = {"ok": True, **booking_summary(load_booking(ctx, caller, b["id"]))}
     _idempotent_store(ctx, key, "reschedule_appointment", result)
     return result
@@ -244,6 +246,7 @@ def cancel_appointment(ctx: ToolContext, caller: Caller, a: CancelArgs) -> dict[
             "calendar_unavailable", "The calendar is not responding. Call handoff_to_human."
         ) from exc
     ctx.conn.execute("UPDATE bookings SET status = 'CANCELLED' WHERE id = %s", (b["id"],))
+    followups.cancel_reminder(ctx, b["customer_id"], b["id"])
     return {"ok": True, **booking_summary(load_booking(ctx, caller, b["id"]))}
 
 

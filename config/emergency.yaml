@@ -1,0 +1,50 @@
+# Emergency rules (ADR 003). A match decides ALONE: no LLM is involved, ever, on the emergency path.
+# When in doubt we escalate: a false alarm costs one phone call, a miss can cost a life.
+# Negations ("no gas smell") still match on purpose; the phrasing set in evals/ reports how often.
+rules:
+  - id: gas_leak
+    kind: gas
+    patterns:
+      - '\bgas\b.{0,25}\b(smell|smells|smelling|leak|leaking|leaks|odou?r)\b'
+      - '\b(smell|smells|smelling|smelled|smell of|odou?r of)\b.{0,25}\bgas\b'
+      - '\b(leak|leaks|leaking|leaked)\b.{0,15}\bgas\b'
+      - 'rotten egg'
+      - 'sulfur|sulphur'
+  - id: carbon_monoxide
+    kind: co
+    patterns:
+      - 'carbon monoxide'
+      - '\bco\b.{0,12}\b(alarm|detector|monitor|going off|beeping)\b'
+      - '\b(alarm|detector)\b.{0,20}\bco\b'
+  - id: flooding
+    kind: water
+    patterns:
+      - 'flood(ed|ing)?\b'
+      - 'burst pipe|pipe (has |just |is )?burst|pipe burst'
+      - 'water.{0,15}(pouring|gushing|everywhere|streaming|spraying)'
+      - '(pouring|gushing|streaming|spraying).{0,15}water'
+  - id: fire_or_electrical
+    kind: fire
+    patterns:
+      - '\bsparks?\b|sparking'
+      - '\bsmoke\b|smoking'
+      - 'burning smell|smells? (like )?(burning|burnt)|something.{0,10}burning'
+      - '\bon fire\b|caught fire|\bfire\b'
+
+# "No heat" only counts as an emergency when it is cold. Both parts must be present.
+no_heat:
+  words: 'no heat|heat (is |has )?(not working|out|stopped|broken|off)|(furnace|heater|heating).{0,15}(not working|out|dead|broke|broken|stopped|won.t)'
+  freezing_words: 'freezing|below freezing|frozen'
+  max_temp_f: 50   # any stated temperature under this (e.g. "44 degrees", "38°F") triggers
+
+# Fixed texts: identical every time, no model. Keep them short and safe.
+templates:
+  customer:
+    gas: "This sounds like a gas emergency. Leave the building now, don't use switches or flames, and call 911 and your gas utility from outside. We are sending a technician and calling you right away."
+    co: "A carbon monoxide alarm is an emergency. Get everyone outside into fresh air now and call 911. We are sending a technician and calling you right away."
+    water: "If you can do it safely, shut off the main water valve. Stay away from electrical items near water. We are sending a technician and calling you right away."
+    fire: "If you see flames or heavy smoke, leave and call 911 first. Turn off the system at the breaker only if it is safe. We are sending a technician and calling you right away."
+    cold: "We are treating a no-heat situation in freezing weather as urgent. A technician is being paged and will call you right away. If anyone is unwell, call 911."
+    default: "This sounds urgent. A technician is being paged and will call you right away. If anyone is in danger, call 911."
+  page: "EMERGENCY ({kind}) customer #{customer_id}, rule {rule}. Call the customer now."
+  owner: "Emergency escalated ({kind}, rule {rule}) for customer #{customer_id}. The agent is paused for this customer until you clear it."

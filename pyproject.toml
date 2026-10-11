@@ -5,13 +5,19 @@ description = "AI operations agent for a home-service business: LangGraph + MCP,
 requires-python = ">=3.12"
 # Runtime dependencies are added at the task that first needs them.
 dependencies = [
+    "apscheduler>=3.11.3",
+    "fastapi>=0.143.0",
+    "httpx>=0.28.1",
     "langfuse>=4.17.0",
+    "langgraph>=1.2.14",
+    "langgraph-checkpoint-postgres>=3.1.2",
     "litellm>=1.104.2",
     "mcp>=2.3.0",
     "psycopg[binary]>=3.3.6",
     "pydantic-settings>=2.15.0",
     "pyyaml>=6.0.3",
     "tzdata>=2026.5",
+    "uvicorn>=0.54.0",
 ]
 
 [dependency-groups]
@@ -19,6 +25,7 @@ dev = [
     "mypy>=1.13",
     "pytest>=8.3",
     "ruff>=0.8",
+    "twilio>=9.11.2",
 ]
 
 [tool.ruff]

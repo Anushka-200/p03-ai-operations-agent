@@ -76,11 +76,11 @@ class OutboxMessaging:
         self.conn = conn
         self.dry_run = dry_run
 
-    def send(self, *, customer_id, channel, body, idempotency_key):
+    def send(self, *, customer_id, channel, body, idempotency_key, recipient=None):
         status = "DRY_RUN" if self.dry_run else "QUEUED"
         row = self.conn.execute(
-            "INSERT INTO outbound_messages (customer_id, channel, body, dry_run, status, idempotency_key)"
-            " VALUES (%s, %s, %s, %s, %s, %s) ON CONFLICT (idempotency_key) DO NOTHING RETURNING id",
-            (customer_id, channel, body, self.dry_run, status, idempotency_key),
+            "INSERT INTO outbound_messages (customer_id, channel, body, dry_run, status, idempotency_key, recipient)"
+            " VALUES (%s, %s, %s, %s, %s, %s, %s) ON CONFLICT (idempotency_key) DO NOTHING RETURNING id",
+            (customer_id, channel, body, self.dry_run, status, idempotency_key, recipient),
         ).fetchone()
         return row[0] if row else None

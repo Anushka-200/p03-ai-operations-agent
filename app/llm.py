@@ -48,12 +48,26 @@ class LLMResult:
     attempts: int
     cached_input_tokens: int = 0  # part of the input served from the prompt cache
     used_fallback: bool = False
+    # Tool use (agent): what the model asked to run, and the assistant message to append to history.
+    tool_calls: list[dict[str, Any]] | None = None  # [{"id", "name", "arguments": json string}]
+    message: dict[str, Any] | None = None
 
 
 def _cached_tokens(usage: Any) -> int:
     """Tokens read from the prompt cache; providers name this differently, so try each."""
     details = getattr(usage, "prompt_tokens_details", None)
     return int(getattr(usage, "cache_read_input_tokens", 0) or getattr(details, "cached_tokens", 0) or 0)
+
+
+def _assistant_message(content: str | None, calls: list[dict[str, Any]]) -> dict[str, Any]:
+    """The assistant turn in OpenAI shape, plain JSON so it can be stored in a checkpoint."""
+    m: dict[str, Any] = {"role": "assistant", "content": content or ""}
+    if calls:
+        m["tool_calls"] = [
+            {"id": c["id"], "type": "function", "function": {"name": c["name"], "arguments": c["arguments"]}}
+            for c in calls
+        ]
+    return m
 
 
 def backoff_delay(attempt: int, base: float = 1.0, cap: float = 20.0) -> float:
@@ -74,6 +88,7 @@ def complete(
     # None = do not send it: Haiku 5.5 and Sonnet 5.5 reject non-default sampling values.
     temperature: float | None = None,
     allow_fallback: bool = True,
+    tools: list[dict[str, Any]] | None = None,  # OpenAI-style tool schemas; LiteLLM translates
     settings: Settings | None = None,
     # Injected so tests can run without network, real sleeping or a real key.
     completion_fn: Callable[..., Any] = litellm.completion,
@@ -91,7 +106,7 @@ def complete(
     ) as obs:
         try:
             result = _call_with_retries(
-                messages, model, max_tokens, temperature, s, completion_fn, cost_fn, sleep_fn
+                messages, model, max_tokens, temperature, s, completion_fn, cost_fn, sleep_fn, tools
             )
         except LLMError as exc:
             # Provider trouble on the default model: one try on a different model, so a customer
@@ -106,7 +121,7 @@ def complete(
             )
             result = _call_with_retries(
                 messages, s.llm_fallback_model, max_tokens, temperature, s,
-                completion_fn, cost_fn, sleep_fn,
+                completion_fn, cost_fn, sleep_fn, tools,
             )  # fmt: skip
             result.used_fallback = True
         if obs is not None:
@@ -133,6 +148,7 @@ def _call_with_retries(
     completion_fn: Callable[..., Any],
     cost_fn: Callable[..., float],
     sleep_fn: Callable[[float], None],
+    tools: list[dict[str, Any]] | None = None,
 ) -> LLMResult:
     api_key = s.anthropic_api_key.get_secret_value() or None
     max_attempts = s.llm_max_retries + 1
@@ -140,7 +156,9 @@ def _call_with_retries(
 
     for attempt in range(1, max_attempts + 1):
         try:
-            extra = {} if temperature is None else {"temperature": temperature}
+            extra: dict[str, Any] = {} if temperature is None else {"temperature": temperature}
+            if tools:
+                extra["tools"] = tools
             response = completion_fn(
                 model=model,
                 messages=messages,
@@ -174,8 +192,13 @@ def _call_with_retries(
         cost = None
         logger.warning("no price known for model", extra={"model": model})
 
+    msg = response.choices[0].message
+    calls = [
+        {"id": c.id, "name": c.function.name, "arguments": c.function.arguments or "{}"}
+        for c in (getattr(msg, "tool_calls", None) or [])
+    ]
     result = LLMResult(
-        text=response.choices[0].message.content or "",
+        text=msg.content or "",
         model=model,
         input_tokens=response.usage.prompt_tokens,
         output_tokens=response.usage.completion_tokens,
@@ -183,6 +206,8 @@ def _call_with_retries(
         latency_s=round(time.perf_counter() - started, 3),
         attempts=attempt,
         cached_input_tokens=_cached_tokens(response.usage),
+        tool_calls=calls or None,
+        message=_assistant_message(msg.content, calls),
     )
     logger.info(
         "llm call",

@@ -32,5 +32,15 @@ class CrmPort(Protocol):
 
 
 class MessagingPort(Protocol):
-    def send(self, *, customer_id: int | None, channel: str, body: str, idempotency_key: str) -> int | None:
-        """Queue a message. The same idempotency_key twice sends it once."""
+    def send(
+        self,
+        *,
+        customer_id: int | None,
+        channel: str,
+        body: str,
+        idempotency_key: str,
+        recipient: str | None = None,
+    ) -> int | None:
+        """Queue a message. The same idempotency_key twice sends it once.
+
+        recipient=None means the customer; otherwise a technician/owner address (pages and alerts)."""

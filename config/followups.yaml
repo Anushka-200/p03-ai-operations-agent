@@ -1,0 +1,13 @@
+# Follow-up rules (configurable). Offsets are hours after the customer's first message (the enquiry),
+# for customers who have NOT booked. Texts are fixed templates: no model, no prices, always safe.
+quiet_hours:            # local time at the business (Austin); nothing is sent outside this window
+  start: 8
+  end: 20
+lead_rules:
+  day0: {after_hours: 1,   text: "Hi {name}, this is CoolBreeze HVAC. Still need help with your AC or heating? Reply here and we'll get you booked. Reply STOP to opt out."}
+  day1: {after_hours: 24,  text: "Hi {name}, CoolBreeze here. We still have openings this week if you'd like a visit. Just reply to book. Reply STOP to opt out."}
+  day3: {after_hours: 72,  text: "Hi {name}, checking in from CoolBreeze HVAC. Want us to find a time for your visit? Reply STOP to opt out."}
+  day7: {after_hours: 168, text: "Hi {name}, last note from CoolBreeze HVAC. If you still need service, reply anytime and we'll help. Reply STOP to opt out."}
+reminder:                # sent this many hours before a booked visit
+  before_hours: 24
+  text: "Hi {name}, a reminder from CoolBreeze HVAC: your visit is {when}. Reply here if you need to change it. Reply STOP to opt out."

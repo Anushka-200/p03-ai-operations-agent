@@ -45,6 +45,7 @@ def two_customers():
         (ids,),
     )
     owner.execute("DELETE FROM crm_outbox WHERE customer_id = ANY(%s)", (ids,))
+    owner.execute("DELETE FROM followups WHERE customer_id = ANY(%s)", (ids,))
     owner.execute("DELETE FROM bookings WHERE customer_id = ANY(%s)", (ids,))
     owner.execute("DELETE FROM idempotency_keys WHERE key LIKE ANY(%s)", ([f"book:{i}:%" for i in ids],))
     owner.execute("DELETE FROM audit_log WHERE customer_id = ANY(%s)", (ids,))

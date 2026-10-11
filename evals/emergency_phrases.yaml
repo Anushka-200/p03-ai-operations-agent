@@ -1,0 +1,55 @@
+# Deterministic emergency phrasing set (free, no LLM). reviewed:false until the owner reads it.
+# expect: true  = must escalate (recall target 100%).
+# expect: false = ordinary request, must NOT escalate (false-positive rate is reported).
+# overtrigger: true = a negation or figure of speech that still escalates ON PURPOSE (ADR 003:
+#   "when in doubt, escalate"); counted separately, not as a failure.
+reviewed: false
+phrases:
+  # --- gas ---
+  - {text: "I smell gas in my kitchen", expect: true}
+  - {text: "there's a gas leak near the furnace", expect: true}
+  - {text: "smells like rotten eggs by the water heater", expect: true}
+  - {text: "strong gas odor in the basement", expect: true}
+  - {text: "pretty sure the furnace is leaking gas", expect: true}
+  - {text: "sulfur smell coming from the vents", expect: true}
+  # --- carbon monoxide ---
+  - {text: "my CO alarm is going off", expect: true}
+  - {text: "carbon monoxide detector keeps beeping", expect: true}
+  - {text: "the detector says CO levels are high", expect: true}
+  - {text: "Carbon Monoxide warning on my alarm", expect: true}
+  # --- water ---
+  - {text: "water is pouring out of the ceiling", expect: true}
+  - {text: "a pipe burst in the attic", expect: true}
+  - {text: "the AC closet is flooding", expect: true}
+  - {text: "my garage is flooded from the water heater", expect: true}
+  - {text: "water gushing from the unit", expect: true}
+  - {text: "burst pipe!! help", expect: true}
+  # --- fire and electrical ---
+  - {text: "the outdoor unit is sparking", expect: true}
+  - {text: "I see smoke coming from the furnace", expect: true}
+  - {text: "there is a burning smell from the vents", expect: true}
+  - {text: "my air handler caught fire", expect: true}
+  - {text: "smells like something is burning", expect: true}
+  # --- no heat in the cold ---
+  - {text: "no heat and it's 38 degrees inside", expect: true}
+  - {text: "furnace is not working, house is 44°F", expect: true}
+  - {text: "heat stopped working and it's freezing in here", expect: true}
+  - {text: "our heater is out and the baby's room is 45 F", expect: true}
+  # --- negations and figures of speech: over-trigger accepted ---
+  - {text: "no gas smell, just warm air from the vents", expect: true, overtrigger: true}
+  - {text: "I don't smell smoke, the AC just isn't cooling", expect: true, overtrigger: true}
+  - {text: "my neighbor's gas bill is crazy, can you check my furnace", expect: false}
+  # --- ordinary requests: must not escalate ---
+  - {text: "I'd like to book an AC tune-up for next week", expect: false}
+  - {text: "how much is a furnace inspection?", expect: false}
+  - {text: "my AC is blowing warm air", expect: false}
+  - {text: "can you reschedule my appointment to Thursday?", expect: false}
+  - {text: "the thermostat shows 72 and the house feels stuffy", expect: false}
+  - {text: "do you service 78704?", expect: false}
+  - {text: "the heat is not working but it's 62 degrees out, no rush", expect: false}
+  - {text: "I want a quote for a new heat pump", expect: false}
+  - {text: "what are your hours on Saturday?", expect: false}
+  - {text: "my unit is making a rattling noise", expect: false}
+  - {text: "need maintenance before summer, nothing urgent", expect: false}
+  - {text: "please cancel my booking", expect: false}
+  - {text: "the AC drips a little water into the pan", expect: false}
