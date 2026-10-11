@@ -11,21 +11,13 @@ import time
 import psycopg
 
 from app import owner_bot
-from app.adapters.fakes import FakeCalendar, FakeCrm, OutboxMessaging
+from app.adapters.factory import make_context
 from app.adapters.telegram import TelegramApi, TelegramError, TelegramPort
 from app.log import setup_logging
 from app.settings import Settings, get_settings
-from app.tools.types import ToolContext
 
 logger = logging.getLogger(__name__)
 MAX_BACKOFF_S = 60
-
-
-def make_ctx(conn: psycopg.Connection, s: Settings) -> ToolContext:
-    return ToolContext(
-        conn=conn, calendar=FakeCalendar(conn), crm=FakeCrm(),
-        messaging=OutboxMessaging(conn, dry_run=s.dry_run), settings=s,
-    )  # fmt: skip
 
 
 def poll_once(s: Settings, tg: TelegramPort, agent, offset: int, history: list[dict[str, str]], llm=None) -> int:
@@ -34,7 +26,7 @@ def poll_once(s: Settings, tg: TelegramPort, agent, offset: int, history: list[d
     for update in tg.get_updates(offset, s.telegram_poll_s):
         try:
             with psycopg.connect(s.database_url) as conn:  # one transaction per update
-                label = owner_bot.handle_update(make_ctx(conn, s), tg, agent, update, history, **kw)
+                label = owner_bot.handle_update(make_context(conn, s), tg, agent, update, history, **kw)
             logger.info("telegram update handled", extra={"route": label})
         except TelegramError:
             raise
@@ -42,7 +34,7 @@ def poll_once(s: Settings, tg: TelegramPort, agent, offset: int, history: list[d
             logger.exception("telegram update failed; skipping it")  # never loop forever on one bad update
         offset = update["update_id"] + 1  # tells Telegram this one is done
     with psycopg.connect(s.database_url) as conn:
-        ctx = make_ctx(conn, s)
+        ctx = make_context(conn, s)
         owner_bot.notify_pending_approvals(ctx, tg, s.telegram_owner_id)
         owner_bot.deliver_owner_alerts(ctx, tg, s.telegram_owner_id)
     return offset

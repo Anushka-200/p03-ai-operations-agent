@@ -56,6 +56,19 @@ class Settings(BaseSettings):
     telegram_live: bool = False
     telegram_poll_s: int = 10  # long-poll wait; also how often alerts and approvals are pushed
 
+    # --- Real integrations (Phase 4). Default = fakes. Each backend is switched on per integration, and
+    # real WRITES still obey DRY_RUN. Credentials stay in .env. ---
+    calendar_backend: str = "fake"  # fake | google
+    google_calendar_id: str = ""  # the TEST calendar's id (share it with the service account's email)
+    google_credentials_file: str = ""  # path to the service-account JSON (outside git)
+    crm_backend: str = "fake"  # fake | hubspot
+    hubspot_token: SecretStr = SecretStr("")  # private-app token
+    twilio_live: bool = False  # deliver QUEUED outbox rows through Twilio (needs DRY_RUN=false too)
+    twilio_account_sid: str = ""
+    twilio_sms_from: str = ""
+    twilio_whatsapp_from: str = ""  # sandbox number, e.g. +14155238886
+    twilio_allowed_to: str = ""  # comma-separated numbers we may text (your own verified phone)
+
     # --- Langfuse tracing; with no keys every tracing call quietly does nothing ---
     langfuse_public_key: str = ""
     langfuse_secret_key: SecretStr = SecretStr("")

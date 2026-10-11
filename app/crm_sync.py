@@ -35,7 +35,9 @@ def process_outbox(ctx: ToolContext, limit: int = 20) -> dict[str, int]:
             assert customer is not None
             cols = ("id", "name", "email", "address", "zip", "crm_contact_id", "phone")
             c = dict(zip(cols, customer, strict=True))
-            contact_id = c["crm_contact_id"] or ctx.crm.upsert_contact(c)
+            known = c["crm_contact_id"]
+            # "dryrun-..." is a placeholder from a dry-run, not a real CRM id: look the contact up properly.
+            contact_id = known if known and not known.startswith("dryrun-") else ctx.crm.upsert_contact(c)
             ctx.conn.execute(
                 "UPDATE customers SET crm_contact_id = %s WHERE id = %s", (contact_id, customer_id)
             )

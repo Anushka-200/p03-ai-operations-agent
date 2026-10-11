@@ -8,7 +8,7 @@ import psycopg
 from fastapi import BackgroundTasks, FastAPI, HTTPException, Request, Response
 
 from app import inbound
-from app.adapters.fakes import FakeCalendar, FakeCrm, OutboxMessaging
+from app.adapters.factory import make_context
 from app.api.twilio_signature import is_valid
 from app.log import setup_logging
 from app.settings import Settings, get_settings
@@ -38,10 +38,7 @@ def create_app(
     def build_ctx(conn: psycopg.Connection) -> ToolContext:
         if make_ctx:
             return make_ctx(conn)
-        return ToolContext(
-            conn=conn, calendar=FakeCalendar(conn), crm=FakeCrm(),
-            messaging=OutboxMessaging(conn, dry_run=s.dry_run), settings=s,
-        )  # fmt: skip
+        return make_context(conn, s)
 
     def background(saved: inbound.Saved, body: str) -> None:
         # Own connection: the request's connection is gone by the time this runs.
