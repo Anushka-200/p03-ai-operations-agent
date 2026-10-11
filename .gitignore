@@ -8,3 +8,4 @@ __pycache__/
 logs/
 # Claude's sealed estimates, revealed at each phase end
 .estimates_claude_view.json
+evals/results/
