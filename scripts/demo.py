@@ -75,8 +75,8 @@ def cleanup() -> None:
                 "bookings",
                 "approvals",
                 "followups",
-                "inbound_messages",
                 "emergencies",
+                "inbound_messages",
                 "audit_log",
             ):
                 o.execute(f"DELETE FROM {t} WHERE customer_id=%s", (cid,))
@@ -122,8 +122,8 @@ def send(sid: str, phone: str, text: str) -> str:
             ).fetchone()
             if row and row[1]:
                 rep = c.execute(
-                    "SELECT body FROM outbound_messages WHERE idempotency_key LIKE %s ORDER BY id LIMIT 1",
-                    (f"in:{row[0]}:%",),
+                    "SELECT body FROM outbound_messages WHERE idempotency_key LIKE %s OR idempotency_key = %s ORDER BY id LIMIT 1",
+                    (f"in:{row[0]}:%", f"emerg:{row[0]}:customer"),
                 ).fetchone()
                 return rep[0] if rep else "(no reply)"
             time.sleep(0.5)
@@ -173,7 +173,7 @@ def main() -> None:
         say("6. The outbox: every message the system would send (nothing was sent)")
         with psycopg.connect(s.migrator_database_url, autocommit=True) as c:
             for who, chan, status, body in c.execute(
-                "SELECT COALESCE(c.name, 'staff'), o.channel, o.status, o.body FROM outbound_messages o"
+                "SELECT CASE WHEN o.customer_id IS NULL THEN 'staff' ELSE COALESCE(c.name, 'customer') END, o.channel, o.status, o.body FROM outbound_messages o"
                 " LEFT JOIN customers c ON c.id = o.customer_id"
                 " WHERE o.customer_id IN (SELECT id FROM customers WHERE phone IN (%s, %s)) OR o.idempotency_key LIKE 'emerg:%%'"
                 " ORDER BY o.id DESC LIMIT 14", (PHONE, GAS_PHONE),

@@ -17,6 +17,8 @@ matches a forbidden pattern. Scenarios were reviewed by the owner; four were re-
 | E4-compaction-on | 1x3 | 100.0% | 1/1 | 0 | 4.33 | 7.0 | $0.0044 | 3.2 / 6.7 |
 | E4-compaction-off | 1x3 | 100.0% | 1/1 | 0 | 4.67 | 6.3 | $0.0042 | 4.4 / 6.2 |
 | E1-sonnet-agent | 22x1 | 86.4% | 19/22 | 0 | 5.92 | 5.1 | $0.0543 | 4.4 / 12.3 |
+| final-frozen | 22x3 | 97.0% | 21/22 | 0 | 4.18 | 5.9 | $0.0017 | 2.8 / 6.1 |
+| final-frozen-2 | 22x3 | 98.5% | 21/22 | 0 | 4.10 | 5.7 | $0.0017 | 3.2 / 6.2 |
 
 Reading the table: **baseline-4** is the reference. Every experiment changes one thing against it.
 
@@ -40,7 +42,10 @@ harness rolls back every scenario), which was judged not worth building for a me
 
 ## Final configuration (frozen)
 Single agent, lean tools, prompt caching on, compaction on, Haiku 5.5 with Sonnet 5.5 as the outage fallback.
-Confirmation run on exactly these defaults (no overrides): see the "final-frozen" row below.
+Confirmation runs on exactly these defaults (no overrides), 22 scenarios x 3 runs:
+- **final-frozen:** 97.0% per run, 21/22 scenarios clean. Its one miss showed a real edge case (a customer asked to cancel, then to move the visit instead, which left two conflicting approval cards).
+- Fix: a newer cancel/reschedule request for the same booking now supersedes the older pending approval (tests added).
+- **final-frozen-2 (after the fix): 98.5% per run (65/66), 21/22 scenarios clean on all three runs, 0 forbidden actions, 4.10 tool calls per booking, $0.0017 and p50 3.2 s per conversation.** The remaining miss is one run that used 7 tool calls against a budget of 6 (`late_cancel_needs_approval`).
 
 ## Harness lessons (the first baseline was 74%, the harness was wrong more often than the agent)
 | Finding | Effect | Fix |
@@ -58,10 +63,10 @@ baseline-3 90.9%, baseline-4 95.5% (after the fixes above).
 ## Targets from the brief
 | Target | Result |
 |---|---|
-| Scenario pass rate >= 90% (3 runs each) | see the final row |
-| 0 forbidden actions executed | 0 in every run of every arm (about 600 conversations) |
+| Scenario pass rate >= 90% (3 runs each) | **98.5% per run; 21 of 22 scenarios (95%) pass all 3 runs** (final-frozen-2) |
+| 0 forbidden actions executed | 0 in every saved run of every arm (640 conversations) |
 | 100% of emergencies routed by rule | 41/41 phrasings in `evals/emergency_phrases.yaml` (recall 100%, no false positives on ordinary requests); emergency scenarios use 0 model calls |
-| Average tool calls per booking, then -25% | 5.58 to 3.85 (-31%) |
+| Average tool calls per booking, then -25% | 5.58 (baseline-4) to 4.10 in the final configuration (**-27%**); E3 alone reached 3.85 |
 | Cost per conversation, baseline to after | $0.0036 to about $0.0017 with caching + lean tools (confirm in the final row) |
 
 ## How to reproduce

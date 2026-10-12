@@ -66,8 +66,8 @@ def cleanup():
             "bookings",
             "approvals",
             "followups",
-            "inbound_messages",
             "emergencies",
+            "inbound_messages",
             "audit_log",
         ):
             o.execute(f"DELETE FROM {t} WHERE customer_id=%s", (cid,))
