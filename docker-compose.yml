@@ -42,7 +42,7 @@ services:
     env_file: .env
     depends_on:
       migrate: {condition: service_completed_successfully}
-    mem_limit: 384m
+    mem_limit: 512m   # measured: about 290 MB idle with the model libraries loaded
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://127.0.0.1:8003/health', timeout=3)"]
       interval: 10s
@@ -66,7 +66,7 @@ services:
     env_file: .env
     depends_on:
       migrate: {condition: service_completed_successfully}
-    mem_limit: 256m
+    mem_limit: 512m   # it loads the agent (LangGraph + LiteLLM), like the API
 
 volumes:
   pgdata:

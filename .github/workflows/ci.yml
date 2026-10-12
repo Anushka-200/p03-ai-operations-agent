@@ -6,6 +6,20 @@ on:
 jobs:
   checks:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: p03
+          POSTGRES_HOST_AUTH_METHOD: trust   # CI database only: no passwords to manage, nothing real inside
+        ports:
+          - 5435:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d p03"
+          --health-interval 5s --health-timeout 3s --health-retries 10
+    env:
+      PHONE_HASH_KEY: ci-test-key
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
@@ -13,8 +27,18 @@ jobs:
       - run: uv run ruff check .
       - run: uv run ruff format --check .
       - run: uv run mypy
-      # Tests that need Postgres skip themselves when it is not running. Phase 6 adds the compose
-      # database to CI so the schema tests and 5 mocked scenarios run there too.
-      - run: uv run pytest -q
+      - name: Create the database roles (same script docker compose uses)
+        run: bash docker/postgres/init/01-roles.sh
         env:
-          PHONE_HASH_KEY: ci-test-key
+          PGHOST: 127.0.0.1
+          PGPORT: "5435"
+          PGPASSWORD: ci
+          P03_MIGRATOR_PASSWORD: ci
+          P03_APP_PASSWORD: ci
+      - name: Migrate and create the checkpoint tables
+        run: |
+          uv run python -m app.db.migrate
+          uv run python -c "from app.agent.run import setup_checkpointer; setup_checkpointer()"
+      - run: uv run pytest -q
+      - name: Scenarios decided by code (emergency, STOP): real pipeline, no model, $0
+        run: uv run python -m evals.run --rules-only --yes

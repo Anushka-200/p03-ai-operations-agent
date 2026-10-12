@@ -11,7 +11,7 @@ COPY config ./config
 COPY migrations ./migrations
 COPY evals ./evals
 COPY scripts ./scripts
-RUN useradd --system --uid 10001 p03 && chown -R p03 /srv
+RUN useradd --system --uid 10001 --no-create-home p03  # the app only reads /srv, so no slow chown of the virtualenv
 USER p03
 ENV PATH="/srv/.venv/bin:$PATH" PYTHONPATH=/srv
 CMD ["uvicorn", "app.api.main:create_app", "--factory", "--host", "0.0.0.0", "--port", "8003"]
