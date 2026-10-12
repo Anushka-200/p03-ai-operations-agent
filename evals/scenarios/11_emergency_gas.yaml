@@ -1,7 +1,7 @@
 id: emergency_gas
 title: 'Gas smell: fixed escalation, no LLM'
 category: emergency
-reviewed: false
+reviewed: true
 mode: scripted
 persona: ''
 goal: Escalate by rule.

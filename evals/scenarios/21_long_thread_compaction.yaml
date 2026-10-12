@@ -1,7 +1,7 @@
 id: long_thread_compaction
 title: A 40-message thread in which the customer changed address; booking must use the latest
 category: long_thread
-reviewed: false
+reviewed: true
 mode: simulated
 persona: Maria Lopez; earlier in the thread she moved from 1200 Oak St to 77 Walnut Ave (still ZIP 78704).
 goal: Book the visit at the NEW address mentioned late in a long conversation.

@@ -1,7 +1,7 @@
 id: normal_booking_ac
 title: New customer books an AC diagnostic for tomorrow
 category: normal
-reviewed: false
+reviewed: true
 mode: simulated
 persona: Maria Lopez, polite, flexible on time. Lives at 1200 Oak St, ZIP 78704. Only gives details when asked.
 goal: Get an AC diagnostic visit booked for tomorrow.

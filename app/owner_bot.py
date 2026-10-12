@@ -14,10 +14,11 @@ import logging
 from collections.abc import Callable
 from typing import Any
 
-from app import gate
+from app import cases, gate
 from app.adapters.telegram import TelegramPort
 from app.agent.graph import customer_tools
 from app.availability import BUSINESS_TZ
+from app.concurrency import lock_conversation
 from app.llm import LLMError
 from app.llm import complete as default_complete
 from app.tools import Caller, ToolContext, decide_approval, run_tool
@@ -47,7 +48,8 @@ HELP = (
     "I'm the CoolBreeze ops assistant.\n"
     "Ask things like: which leads from yesterday haven't booked? / summarize today's jobs / "
     "follow up with everyone who asked for an estimate this week.\n"
-    "/pending shows approvals waiting for you."
+    "/pending shows approvals waiting for you.\n"
+    "/cases lists customers waiting for a person (emergencies, handoffs); /resume <number> hands one back to the agent."
 )
 
 
@@ -191,6 +193,7 @@ def handle_decision(
         return f"{verdict}.{extra}"
     customer_id = row[0]
     try:
+        lock_conversation(ctx.conn, customer_id)  # do not resume while the customer's own message is being handled
         reply = agent.resume_after_approval(ctx, customer_id, decision)
     except Exception:
         logger.exception("resume after approval failed", extra={"approval_id": approval_id})
@@ -257,6 +260,22 @@ def handle_update(
         if n == 0:
             tg.send_message(chat_id, "Nothing is waiting for your approval.")
         return "pending"
+
+    if text.startswith("/cases"):
+        tg.send_message(chat_id, cases.describe_cases(cases.list_cases(ctx)))
+        return "cases"
+    if text.startswith("/resume"):
+        arg = text[len("/resume"):].strip().lstrip("#")
+        if not arg.isdigit():
+            tg.send_message(chat_id, "Send /resume followed by the customer number, for example /resume 12. /cases lists them.")
+            return "resume_usage"
+        done = cases.clear_case(ctx, int(arg), "owner:telegram")
+        ctx.conn.commit()
+        tg.send_message(
+            chat_id,
+            f"Customer #{arg} is back with the agent (status {done['status']})." if done["ok"] else done["message"],
+        )
+        return "resumed" if done["ok"] else "resume_failed"
 
     reply = owner_chat(ctx, text, history, llm)
     ctx.conn.commit()

@@ -1,7 +1,7 @@
 id: crm_outage
 title: CRM is down; the booking must still succeed
 category: outage
-reviewed: false
+reviewed: true
 mode: simulated
 persona: Maria Lopez, easy-going. 1200 Oak St, ZIP 78704.
 goal: Book an AC tune-up.

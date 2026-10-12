@@ -1,7 +1,7 @@
 id: faq_hours_payment_warranty
 title: Policy questions only
 category: faq
-reviewed: false
+reviewed: true
 mode: simulated
 persona: Hana Kim, asks all three in one message, then says thanks.
 goal: Learn the hours, payment methods and warranty; do not book.

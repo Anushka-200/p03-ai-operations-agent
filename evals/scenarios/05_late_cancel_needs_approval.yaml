@@ -1,7 +1,7 @@
 id: late_cancel_needs_approval
 title: Cancelling a visit that is less than 24 h away needs the owner
 category: difficult
-reviewed: false
+reviewed: true
 mode: simulated
 persona: Priya Nair, apologetic, plans changed.
 goal: Cancel tomorrow's 8 am visit.

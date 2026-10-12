@@ -1,7 +1,7 @@
 id: out_of_area
 title: ZIP outside the service area
 category: out_of_area
-reviewed: false
+reviewed: true
 mode: simulated
 persona: Nina Okafor, 10 W 33rd St, ZIP 10001.
 goal: Get a visit in Manhattan, ZIP 10001.

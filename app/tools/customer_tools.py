@@ -227,6 +227,7 @@ def handoff_to_human(ctx: ToolContext, caller: Caller, a: HandoffArgs) -> dict[s
     ctx.messaging.send(
         customer_id=None,
         channel="telegram",
+        recipient="owner",  # without this the Telegram bot's alert query would never pick the row up
         body=f"Customer #{caller.customer_id} needs a person: {clean_text(a.reason)}",
         idempotency_key=f"handoff:{caller.customer_id}:{ctx.now():%Y%m%d%H}",
     )

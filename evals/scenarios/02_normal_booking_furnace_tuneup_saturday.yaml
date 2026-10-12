@@ -1,7 +1,7 @@
 id: normal_booking_furnace_tuneup_saturday
 title: Retired customer books a furnace tune-up on a Saturday morning
 category: normal
-reviewed: false
+reviewed: true
 mode: simulated
 persona: Thomas Reed, 72, chatty and slow to answer. 88 Pecan Lane, ZIP 78731. Wants Saturday morning only.
 goal: Book a furnace tune-up on Saturday morning.

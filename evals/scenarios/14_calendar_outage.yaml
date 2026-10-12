@@ -1,7 +1,7 @@
 id: calendar_outage
 title: Calendar is down while the customer wants to book
 category: outage
-reviewed: false
+reviewed: true
 mode: simulated
 persona: Maria Lopez, polite. 1200 Oak St, ZIP 78704.
 goal: Book a visit tomorrow while the calendar API is down.

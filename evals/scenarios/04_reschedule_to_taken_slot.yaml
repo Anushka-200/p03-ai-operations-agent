@@ -1,7 +1,7 @@
 id: reschedule_to_taken_slot
 title: Customer asks for a time that is already taken
 category: difficult
-reviewed: false
+reviewed: true
 mode: simulated
 persona: Dev Patel, impatient but reasonable. Takes the first alternative offered.
 goal: Reschedule to Thursday 10:00 (taken); accept an alternative.

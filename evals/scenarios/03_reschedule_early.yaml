@@ -1,7 +1,7 @@
 id: reschedule_early
 title: Customer moves an upcoming visit to another day (more than 24 h away)
 category: normal
-reviewed: false
+reviewed: true
 mode: simulated
 persona: Maria Lopez, busy, short messages.
 goal: Move the booked visit to Friday afternoon.

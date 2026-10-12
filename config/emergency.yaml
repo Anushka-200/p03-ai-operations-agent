@@ -46,5 +46,5 @@ templates:
     fire: "If you see flames or heavy smoke, leave and call 911 first. Turn off the system at the breaker only if it is safe. We are sending a technician and calling you right away."
     cold: "We are treating a no-heat situation in freezing weather as urgent. A technician is being paged and will call you right away. If anyone is unwell, call 911."
     default: "This sounds urgent. A technician is being paged and will call you right away. If anyone is in danger, call 911."
-  page: "EMERGENCY ({kind}) customer #{customer_id}, rule {rule}. Call the customer now."
-  owner: "Emergency escalated ({kind}, rule {rule}) for customer #{customer_id}. The agent is paused for this customer until you clear it."
+  page: "EMERGENCY ({kind}) customer #{customer_id} ({phone}), rule {rule}. Call the customer now."
+  owner: "Emergency escalated ({kind}, rule {rule}) for customer #{customer_id} ({phone}). The agent is paused for this customer until you clear it."

@@ -1,5 +1,6 @@
 """Tools that create or change bookings and money. Every one runs behind the permission gate."""
 
+from contextlib import suppress
 from datetime import timedelta
 from typing import Any
 
@@ -205,9 +206,9 @@ def reschedule_appointment(ctx: ToolContext, caller: Caller, a: RescheduleArgs) 
             )
     except psycopg.errors.ExclusionViolation as exc:
         raise _slot_error(ctx, "taken", service) from exc
+    # Create the NEW event first, then delete the old one: if the calendar fails half way, the customer
+    # still has an event on the calendar (never zero). The whole tool call rolls back on an error.
     try:
-        if b["calendar_event_id"]:
-            ctx.calendar.delete_event(b["calendar_event_id"])
         event_id = ctx.calendar.create_event(
             b["id"], tech, start, end, f"Job #{b['id']}: {b['service_code']}"
         )
@@ -215,8 +216,18 @@ def reschedule_appointment(ctx: ToolContext, caller: Caller, a: RescheduleArgs) 
         raise ToolError(
             "calendar_unavailable", "The calendar is not responding. Call handoff_to_human."
         ) from exc
+    if b["calendar_event_id"]:
+        try:
+            ctx.calendar.delete_event(b["calendar_event_id"])
+        except AdapterUnavailable as exc:
+            with suppress(AdapterUnavailable):
+                ctx.calendar.delete_event(event_id)  # best effort: do not leave the new event orphaned
+            raise ToolError(
+                "calendar_unavailable", "The calendar is not responding. Call handoff_to_human."
+            ) from exc
     ctx.conn.execute("UPDATE bookings SET calendar_event_id = %s WHERE id = %s", (event_id, b["id"]))
     followups.schedule_reminder(ctx, b["customer_id"], b["id"], start)  # moves the reminder to the new time
+    crm_sync.enqueue(ctx, b["customer_id"], "upsert_deal", {"booking_id": b["id"]})  # CRM sees the new time
     result = {"ok": True, **booking_summary(load_booking(ctx, caller, b["id"]))}
     _idempotent_store(ctx, key, "reschedule_appointment", result)
     return result
@@ -247,6 +258,7 @@ def cancel_appointment(ctx: ToolContext, caller: Caller, a: CancelArgs) -> dict[
         ) from exc
     ctx.conn.execute("UPDATE bookings SET status = 'CANCELLED' WHERE id = %s", (b["id"],))
     followups.cancel_reminder(ctx, b["customer_id"], b["id"])
+    crm_sync.enqueue(ctx, b["customer_id"], "upsert_deal", {"booking_id": b["id"]})  # deal -> closed lost
     return {"ok": True, **booking_summary(load_booking(ctx, caller, b["id"]))}
 
 
@@ -266,6 +278,7 @@ class DiscountArgs(ToolArgs):
 def request_discount(ctx: ToolContext, caller: Caller, a: DiscountArgs) -> dict[str, Any]:
     # This body only runs AFTER the owner approved (the gate turns every customer call into a request).
     ctx.conn.execute("UPDATE bookings SET discount_pct = %s WHERE id = %s", (a.pct, a.booking_id))
+    crm_sync.enqueue(ctx, caller.customer_id, "upsert_deal", {"booking_id": a.booking_id})  # type: ignore[arg-type]
     return {"ok": True, **booking_summary(load_booking(ctx, caller, a.booking_id))}
 
 

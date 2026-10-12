@@ -1,7 +1,7 @@
 id: duplicate_message_sid
 title: Twilio delivers the same text twice
 category: duplicate
-reviewed: false
+reviewed: true
 mode: scripted
 persona: ''
 goal: The same booking request arrives twice with one MessageSid; handle it once.

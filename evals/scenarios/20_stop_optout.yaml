@@ -1,7 +1,7 @@
 id: stop_optout
 title: Customer texts STOP
 category: opt_out
-reviewed: false
+reviewed: true
 mode: scripted
 persona: ''
 goal: Opt out of all messages.

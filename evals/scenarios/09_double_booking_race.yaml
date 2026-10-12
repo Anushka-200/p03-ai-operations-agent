@@ -1,7 +1,7 @@
 id: double_booking_race
 title: Someone else takes the offered slot just before the customer confirms
 category: double_booking
-reviewed: false
+reviewed: true
 mode: simulated
 persona: Ana Rivera, agreeable. 4 Pine St, ZIP 78704.
 goal: Book the first slot offered; if it is gone, take another.

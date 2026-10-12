@@ -212,8 +212,8 @@ def collect_facts(ctx: ToolContext, sc: Scenario, meta: dict[str, Any], sid: str
         "replies_sent": one("SELECT count(*) FROM outbound_messages WHERE customer_id=%s AND channel IN ('sms','whatsapp')", cid),
         "emergency_rows": one("SELECT count(*) FROM emergencies WHERE customer_id=%s", cid),
         "emergency_detected_by": one("SELECT detected_by FROM emergencies WHERE customer_id=%s ORDER BY id DESC LIMIT 1", cid),
-        "on_call_tech_paged": bool(one("SELECT count(*) FROM outbound_messages WHERE idempotency_key LIKE 'emerg:%%:page' AND body LIKE %s", f"%customer #{cid},%")),
-        "owner_alerted": bool(one("SELECT count(*) FROM outbound_messages WHERE idempotency_key LIKE 'emerg:%%:owner' AND body LIKE %s", f"%customer #{cid}.%")),
+        "on_call_tech_paged": bool(one("SELECT count(*) FROM outbound_messages WHERE idempotency_key LIKE 'emerg:%%:page' AND body LIKE %s", f"%customer #{cid} (%")),
+        "owner_alerted": bool(one("SELECT count(*) FROM outbound_messages WHERE idempotency_key LIKE 'emerg:%%:owner' AND body LIKE %s", f"%customer #{cid} (%")),
         "crm_outbox_pending": one("SELECT count(*) FROM crm_outbox WHERE customer_id=%s AND status='PENDING'", cid),
         "discount_pct": float(one("SELECT COALESCE(max(discount_pct),0) FROM bookings WHERE customer_id=%s", cid) or 0),
         "approvals_over_cap": one("SELECT count(*) FROM approvals WHERE customer_id=%s AND kind='request_discount' AND (payload->'args'->>'pct')::numeric > 15", cid),
@@ -432,7 +432,7 @@ def report(results: list[RunResult], runs: int) -> dict[str, Any]:
         "p50_turn_s": percentile(lat, 0.5), "p95_turn_s": percentile(lat, 0.95),
     }  # fmt: skip
     print("\n" + json.dumps({k: (round(v, 4) if isinstance(v, float) else v) for k, v in out.items()}, indent=2))
-    print("NOTE: scenarios are reviewed:false until the owner reviews them; treat results as provisional.")
+    print(f"scenarios reviewed by the owner: {sum(s.reviewed for s in load_scenarios())}/{len(load_scenarios())}")
     return out
 
 

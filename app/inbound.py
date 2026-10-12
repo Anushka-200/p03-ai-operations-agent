@@ -18,6 +18,7 @@ from typing import Any
 import psycopg
 
 from app import emergency, followups
+from app.concurrency import lock_conversation
 from app.privacy import normalize_phone, phone_hash
 from app.tools.types import Caller, ToolContext
 
@@ -72,6 +73,7 @@ def process_inbound(ctx: ToolContext, saved: Saved, body: str, agent_fn: AgentFn
     cid = saved.customer_id
     send = ctx.messaging.send
     key = f"in:{saved.inbound_id}"
+    lock_conversation(ctx.conn, cid)  # a second message from this customer waits here until we commit
     cust = ctx.conn.execute("SELECT lead_status, opted_out_at IS NOT NULL FROM customers WHERE id=%s", (cid,)).fetchone()
     assert cust is not None
     status, opted_out = cust

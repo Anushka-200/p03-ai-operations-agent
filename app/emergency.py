@@ -115,13 +115,17 @@ def escalate(ctx: ToolContext, customer_id: int, inbound_id: int | None, match: 
         "SELECT phone FROM technicians WHERE on_call AND active ORDER BY id LIMIT 1"
     ).fetchone()
     fields = {"kind": match.kind, "rule": match.rule, "customer_id": customer_id}
+    # The technician and the owner must be able to call the customer, so their texts carry the number.
+    # It goes only into these two private messages, never into the audit row (`fields`).
+    who = ctx.conn.execute("SELECT phone FROM customers WHERE id = %s", (customer_id,)).fetchone()
+    shown = {**fields, "phone": who[0] if who else "(no number)"}
     if tech:
         ctx.messaging.send(
-            customer_id=None, channel="sms", body=cfg["page"].format(**fields),
+            customer_id=None, channel="sms", body=cfg["page"].format(**shown),
             idempotency_key=f"{key}:page", recipient=tech[0],
         )  # fmt: skip
     ctx.messaging.send(
-        customer_id=None, channel="telegram", body=cfg["owner"].format(**fields),
+        customer_id=None, channel="telegram", body=cfg["owner"].format(**shown),
         idempotency_key=f"{key}:owner", recipient="owner",
     )  # fmt: skip
 

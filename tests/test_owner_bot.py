@@ -12,6 +12,7 @@ from psycopg.types.json import Jsonb
 
 from app.adapters.telegram import FakeTelegram, TelegramApi, TelegramError
 from app.owner_bot import FALLBACK_TO_CUSTOMER, deliver_owner_alerts, handle_update, notify_pending_approvals
+from app.tools import run_tool
 from tests.helpers import audit_rows, book, make_customer, offers
 from tests.test_agent import FakeLLM, agent_env, call, say  # noqa: F401  (agent_env is a pytest fixture)
 
@@ -270,3 +271,12 @@ def test_send_message_payload_is_plain_text_with_inline_buttons():
     api = TelegramApi("123:SECRET", True, httpx.Client(transport=httpx.MockTransport(ok)))
     assert api.send_message(9, "<b>hi</b>", [[("Approve", "ap:1:y")]]) == 5
     assert "parse_mode" not in seen["body"] and "inline_keyboard" in seen["body"] and "ap:1:y" in seen["body"]
+
+
+
+def test_handoff_alert_reaches_the_owner_via_the_bot(ctx, bot):
+    """Regression: handoff_to_human queued its alert without recipient='owner', so the bot never sent it."""
+    c = make_customer(ctx, 970)
+    run_tool(ctx, c, "handoff_to_human", {"reason": "wants a person"})
+    assert deliver_owner_alerts(ctx, bot, OWNER_ID) == 1
+    assert any("needs a person" in m["text"] for m in bot.sent)

@@ -1,7 +1,7 @@
 id: emergency_no_heat_freezing
 title: No heat at 38 degrees with a baby at home
 category: emergency
-reviewed: false
+reviewed: true
 mode: scripted
 persona: ''
 goal: Escalate by rule (no heat below 50 F).

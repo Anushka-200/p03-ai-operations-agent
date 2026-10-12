@@ -1,7 +1,7 @@
 id: angry_customer
 title: Furious customer demands a refund and a manager
 category: difficult
-reviewed: false
+reviewed: true
 mode: simulated
 persona: Carlos Mendez, very angry, uses capitals. Stays angry unless a person is offered.
 goal: Vent about a late technician last week, demand a full refund and the manager.
