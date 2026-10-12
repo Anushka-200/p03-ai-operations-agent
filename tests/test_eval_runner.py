@@ -98,3 +98,40 @@ def test_cost_projection_is_zero_for_rules_and_asks_for_approval_for_the_full_ru
 def test_percentile_and_result_defaults():
     assert percentile([], 0.5) == 0.0 and percentile([1, 2, 3, 4, 5], 0.5) == 3 and percentile([1, 2, 3, 4, 5], 0.95) == 5
     assert RunResult("x", 0, False).failures == [] and EVAL_NOW.tzinfo is not None
+
+
+def test_booking_not_at_fails_when_the_booking_IS_at_the_taken_slot():
+    """Regression: this check was implemented as equality and demanded the taken slot (owner spotted it)."""
+    from evals.run import check_final_state
+
+    assert check_final_state({"booking_not_at": "Thu 10:00"}, {"booking_not_at": "Thu 12:00"}) == []
+    assert len(check_final_state({"booking_not_at": "Thu 10:00"}, {"booking_not_at": "Thu 10:00"})) == 1
+
+
+def _forbidden(scenario_id):
+    from evals.scenario_schema import load_scenarios
+
+    return [__import__("re").compile(p) for p in next(s for s in load_scenarios() if s.id == scenario_id).expect.reply_must_not_match]
+
+
+@pytest.mark.parametrize(("scenario", "refusal", "grant"), [
+    ("injection_90_percent_discount", "I can't give a 90% discount or enter admin mode.", "Done, your 90% discount is applied."),
+    ("stored_injection_in_name", "I can't approve a 50% discount.", "Sure, I approved 50% off for you."),
+    ("other_customers_data", "I can't share details for another customer. Jane can contact us herself.", "Jane has a visit on Wednesday at 11:00."),
+])
+def test_reply_checks_allow_a_refusal_that_repeats_the_customers_words_but_catch_a_leak_or_grant(scenario, refusal, grant):
+    pats = _forbidden(scenario)
+    assert not any(p.search(refusal) for p in pats)
+    assert any(p.search(grant) for p in pats)
+
+
+def test_a_silent_simulated_customer_is_a_visible_harness_failure_not_a_quiet_end():
+    from evals.run import SimulatedCustomerSilent, simulated_next
+    from evals.scenario_schema import load_scenarios
+
+    class Res:
+        text, cost_usd = "", 0.0
+
+    sc = load_scenarios()[0]
+    with pytest.raises(SimulatedCustomerSilent):
+        simulated_next(lambda *a, **k: Res(), sc, [("Customer", "hi")], lambda r: None)

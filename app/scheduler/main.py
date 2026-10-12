@@ -6,7 +6,7 @@ import logging
 import psycopg
 from apscheduler.schedulers.blocking import BlockingScheduler
 
-from app import followups
+from app import crm_sync, followups
 from app.adapters.factory import make_context
 from app.adapters.twilio_sender import TwilioSender, deliver_outbox
 from app.log import setup_logging
@@ -39,11 +39,27 @@ def run_delivery() -> None:
         logger.exception("delivery failed; will retry")
 
 
-def main() -> None:
-    setup_logging()
+def run_crm_sync() -> None:
+    """Push queued contact/deal updates to the CRM; failures wait with backoff (crm_outbox)."""
+    s = get_settings()
+    try:
+        with psycopg.connect(s.database_url) as conn:
+            crm_sync.process_outbox(make_context(conn, s))
+    except Exception:
+        logger.exception("crm sync failed; will retry")
+
+
+def build_scheduler() -> BlockingScheduler:
     sched = BlockingScheduler(timezone="UTC")
     sched.add_job(run_tick, "interval", seconds=60, max_instances=1, coalesce=True, id="followup_tick")
     sched.add_job(run_delivery, "interval", seconds=15, max_instances=1, coalesce=True, id="twilio_delivery")
+    sched.add_job(run_crm_sync, "interval", seconds=30, max_instances=1, coalesce=True, id="crm_sync")
+    return sched
+
+
+def main() -> None:
+    setup_logging()
+    sched = build_scheduler()
     logger.info("scheduler started")
     sched.start()
 

@@ -123,3 +123,10 @@ def _inbound_flow(ctx, c):
     inbound2 = ctx.conn.execute("INSERT INTO inbound_messages (message_sid, customer_id, channel, body) VALUES ('SM-fu-2', %s, 'sms', 'STOP') RETURNING id", (c.customer_id,)).fetchone()[0]
     process_inbound(ctx, Saved(inbound2, c.customer_id, "sms", False), "STOP", lambda *a: "never")
     assert set(statuses(ctx, c.customer_id).values()) == {"CANCELLED"}
+
+
+def test_the_scheduler_runs_followups_message_delivery_and_crm_sync():
+    """Regression: process_outbox existed but nothing called it, so CRM updates queued forever."""
+    from app.scheduler.main import build_scheduler
+
+    assert {j.id for j in build_scheduler().get_jobs()} == {"followup_tick", "twilio_delivery", "crm_sync"}

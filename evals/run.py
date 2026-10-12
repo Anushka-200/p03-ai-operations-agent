@@ -236,7 +236,10 @@ def check_final_state(expected: dict[str, Any], facts: dict[str, Any]) -> list[s
     bad = []
     for key, want in expected.items():
         base, _, op = key.rpartition("_")
-        if base in facts and op in OPS:
+        if key.endswith("_not_at") and key in facts:
+            # "booking_not_at: Thu 10:00" means the booking must NOT be at that time (the taken slot).
+            ok, actual = facts[key] != want, facts[key]
+        elif base in facts and op in OPS:
             ok, actual = OPS[op](facts[base], want), facts[base]
         elif key == "customer_address_contains":
             ok, actual = want.lower() in facts[key].lower(), facts[key]
@@ -286,16 +289,23 @@ Rules: write ONLY the customer's next text message (short, natural, one or two s
 (address, ZIP, name) only when asked. When your goal is done or clearly impossible, reply exactly DONE."""
 
 
+class SimulatedCustomerSilent(RuntimeError):
+    """The model playing the customer returned no text twice in a row: a harness problem, not an agent one."""
+
+
 def simulated_next(complete: Callable[..., Any], sc: Scenario, transcript: list[tuple[str, str]], track: Callable[[Any], None]) -> str | None:
     convo = "\n".join(f"{who}: {text}" for who, text in transcript)
-    res = complete(
-        [{"role": "system", "content": SIM_SYSTEM.format(persona=sc.persona, goal=sc.goal)},
-         {"role": "user", "content": f"Conversation so far:\n{convo}\n\nYour next message (or DONE):"}],
-        name="eval-customer", max_tokens=150,
-    )  # fmt: skip
-    track(res)
-    text = res.text.strip()
-    return None if text.upper().startswith("DONE") or not text else text
+    for _ in range(2):
+        res = complete(
+            [{"role": "system", "content": SIM_SYSTEM.format(persona=sc.persona, goal=sc.goal)},
+             {"role": "user", "content": f"Conversation so far:\n{convo}\n\nYour next message (or DONE):"}],
+            name="eval-customer", max_tokens=600,  # 150 was too small: the model's hidden thinking used it all and left no text
+        )  # fmt: skip
+        track(res)
+        text = res.text.strip()
+        if text:
+            return None if text.upper().startswith("DONE") else text
+    raise SimulatedCustomerSilent("the simulated customer returned no text twice (harness problem)")
 
 
 def run_scenario(
@@ -328,6 +338,7 @@ def run_scenario(
             cfg = agent._config(ctx, Caller("customer", meta["cid"]))
             agent.graph.update_state(cfg, {"messages": _history_seed()})
         transcript: list[tuple[str, str]] = []
+        harness_note = ""
         pending = [sc.opening_message, *sc.script]
         for turn in range(MAX_TURNS):
             if sc.mode == "scripted":
@@ -337,7 +348,11 @@ def run_scenario(
             elif turn == 0:
                 text = sc.opening_message
             else:
-                nxt = simulated_next(complete, sc, transcript, track)
+                try:
+                    nxt = simulated_next(complete, sc, transcript, track)
+                except SimulatedCustomerSilent as exc:
+                    harness_note = str(exc)
+                    break
                 if nxt is None:
                     break
                 text = nxt
@@ -354,6 +369,8 @@ def run_scenario(
                 transcript.append(("Company", replies[-1]))
             result.replies = replies
         failures, stats = grade(ctx, sc, meta, sid_base if sc.setup.get("deliver_twice") else f"{sid_base}-0", result.replies, counting["llm"])
+        if harness_note:
+            failures = [*failures, f"harness: {harness_note}"]
         result.failures, result.tool_calls, result.forbidden_executed = failures, stats["tool_calls"], stats["forbidden_executed"]
         result.llm_calls = counting["llm"]
         result.booked = bool(collect_facts(ctx, sc, meta, "")["bookings_for_customer"])

@@ -22,5 +22,51 @@ services:
       timeout: 3s
       retries: 10
 
+  # ---- the application (docker compose up). One image, three commands. ----
+  migrate:                        # runs once: applies the SQL migrations as the migrator role, then exits
+    build: .
+    command: ["python", "-m", "app.db.migrate"]
+    environment: &db_env
+      MIGRATOR_DATABASE_URL: postgresql://p03_migrator:${P03_MIGRATOR_PASSWORD}@postgres:5432/p03
+      DATABASE_URL: postgresql://p03_app:${P03_APP_PASSWORD}@postgres:5432/p03
+    env_file: .env
+    depends_on:
+      postgres: {condition: service_healthy}
+    restart: "no"
+
+  api:
+    build: .
+    ports:
+      - "127.0.0.1:8003:8003"      # local only: no public URL without the owner's approval
+    environment: *db_env
+    env_file: .env
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+    mem_limit: 384m
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://127.0.0.1:8003/health', timeout=3)"]
+      interval: 10s
+      timeout: 4s
+      retries: 6
+
+  scheduler:                      # follow-up tick, Twilio delivery, CRM sync
+    build: .
+    command: ["python", "-m", "app.scheduler.main"]
+    environment: *db_env
+    env_file: .env
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+    mem_limit: 256m
+
+  telegram-bot:                   # optional: needs TELEGRAM_BOT_TOKEN and TELEGRAM_OWNER_ID in .env
+    build: .
+    command: ["python", "-m", "app.scheduler.telegram_bot"]
+    profiles: ["telegram"]
+    environment: *db_env
+    env_file: .env
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+    mem_limit: 256m
+
 volumes:
   pgdata:

@@ -1,0 +1,28 @@
+flowchart LR
+  C[Customer<br/>SMS / WhatsApp] --> TW[Twilio] -->|signed webhook| API[FastAPI :8003<br/>verify signature, dedupe MessageSid,<br/>save first, answer 200]
+  API --> LOCK[Per-customer lock<br/>one conversation at a time]
+  LOCK --> PRE{Emergency pre-router<br/>rules, no LLM}
+  PRE -- emergency --> ESC[Fixed path: safety text to customer,<br/>SMS page to on-call tech,<br/>Telegram alert to owner]
+  PRE -- normal --> G[LangGraph agent<br/>checkpoints in Postgres]
+  G -->|every tool call| GATE{Permission gate<br/>role x tool, customer scope,<br/>caps, audit}
+  GATE -- allowed --> REG[Tool registry<br/>Pydantic-validated]
+  GATE -- needs approval --> APQ[(approvals table)]
+  GATE -- forbidden --> G
+  REG --> AD[Adapters behind ports<br/>fake or real + circuit breaker]
+  AD --> GC[Google Calendar]
+  AD --> HS[HubSpot]
+  REG --> OUT[(outbound_messages<br/>outbox)]
+  G --> GUARD[Output guard<br/>prices, booked claims] --> OUT
+  OUT --> SCH[Scheduler process<br/>deliver, CRM sync, follow-up tick]
+  SCH --> TW
+  SCH --> HS
+  BOT[Telegram bot<br/>long polling, owner only] -->|push cards and alerts| OWNER[Owner phone]
+  APQ --> BOT
+  OUT -. owner alerts .-> BOT
+  OWNER -->|Approve / Reject, /cases, /resume, questions| BOT
+  BOT -->|decide_approval, resume thread| G
+  MCP[MCP server stdio] --> GATE
+  CD[Claude Desktop] --> MCP
+  G -. traces .-> LF[Langfuse]
+  GATE -.-> AUD[(audit_log<br/>append-only)]
+  PG[(Postgres 16)]
