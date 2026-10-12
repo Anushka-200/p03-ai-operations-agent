@@ -18,7 +18,9 @@ _real: dict[str, object] = {}
 def build_calendar(conn: psycopg.Connection, s: Settings) -> CalendarPort:
     if s.calendar_backend == "google":
         if "calendar" not in _real:
-            _real["calendar"] = GoogleCalendar(s.google_calendar_id, service_account_token_fn(s.google_credentials_file), dry_run=s.dry_run)
+            _real["calendar"] = GoogleCalendar(
+                s.google_calendar_id, service_account_token_fn(s.google_credentials_file), dry_run=s.dry_run
+            )
         return _real["calendar"]  # type: ignore[return-value]
     return FakeCalendar(conn)
 

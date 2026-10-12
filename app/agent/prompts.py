@@ -44,7 +44,9 @@ def lean_system(base: str, catalog: str) -> str:
     return base + f"\nOur services (code | name | price | minutes | includes):\n{catalog}\n"
 
 
-def system_prompt(now: datetime, customer: dict[str, str | None], summary: str = "", catalog: str = "") -> str:
+def system_prompt(
+    now: datetime, customer: dict[str, str | None], summary: str = "", catalog: str = ""
+) -> str:
     local = now.astimezone(BUSINESS_TZ)
     known = ", ".join(f"{k}={clean_text(v)[:80] if v else 'unknown'}" for k, v in customer.items())
     return (

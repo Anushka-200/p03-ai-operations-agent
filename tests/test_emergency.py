@@ -9,7 +9,9 @@ from app import emergency
 from app.llm import LLMError
 from tests.helpers import make_customer
 
-PHRASES = yaml.safe_load((Path(__file__).parent.parent / "evals" / "emergency_phrases.yaml").read_text())["phrases"]
+PHRASES = yaml.safe_load((Path(__file__).parent.parent / "evals" / "emergency_phrases.yaml").read_text())[
+    "phrases"
+]
 
 
 def test_recall_is_100_percent_and_no_false_positives_on_ordinary_requests():
@@ -17,8 +19,10 @@ def test_recall_is_100_percent_and_no_false_positives_on_ordinary_requests():
     false_alarms = [p["text"] for p in PHRASES if not p["expect"] and emergency.detect(p["text"]) is not None]
     positives = [p for p in PHRASES if p["expect"]]
     overtrigger = [p for p in positives if p.get("overtrigger")]
-    print(f"\nphrases={len(PHRASES)} recall={(len(positives)-len(missed))}/{len(positives)} "
-          f"false_alarms={len(false_alarms)} overtrigger(accepted)={len(overtrigger)}")
+    print(
+        f"\nphrases={len(PHRASES)} recall={(len(positives) - len(missed))}/{len(positives)} "
+        f"false_alarms={len(false_alarms)} overtrigger(accepted)={len(overtrigger)}"
+    )
     assert missed == []
     assert false_alarms == []
 
@@ -50,7 +54,9 @@ def test_classifier_can_add_coverage():
     class R:
         text = "EMERGENCY"
 
-    m = emergency.classifier_says_emergency("my basement is turning into a pool", complete_fn=lambda *a, **k: R())
+    m = emergency.classifier_says_emergency(
+        "my basement is turning into a pool", complete_fn=lambda *a, **k: R()
+    )
     assert m and m.detected_by == "classifier"
 
 
@@ -78,9 +84,13 @@ def test_escalation_writes_everything_and_is_idempotent(ctx):
     assert len(msgs) == 3  # customer, on-call tech, owner: once each
     assert {m[1] for m in msgs} >= {"owner"}
     assert all(m[2] == "DRY_RUN" for m in msgs)
-    assert ctx.conn.execute("SELECT lead_status FROM customers WHERE id=%s", (cust.customer_id,)).fetchone()[0] == "EMERGENCY"
+    assert (
+        ctx.conn.execute("SELECT lead_status FROM customers WHERE id=%s", (cust.customer_id,)).fetchone()[0]
+        == "EMERGENCY"
+    )
     audit_rows = ctx.conn.execute(
-        "SELECT decision FROM audit_log WHERE tool='emergency_escalation' AND customer_id=%s", (cust.customer_id,)
+        "SELECT decision FROM audit_log WHERE tool='emergency_escalation' AND customer_id=%s",
+        (cust.customer_id,),
     ).fetchall()
     assert audit_rows
 

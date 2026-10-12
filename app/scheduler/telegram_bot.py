@@ -20,7 +20,9 @@ logger = logging.getLogger(__name__)
 MAX_BACKOFF_S = 60
 
 
-def poll_once(s: Settings, tg: TelegramPort, agent, offset: int, history: list[dict[str, str]], llm=None) -> int:
+def poll_once(
+    s: Settings, tg: TelegramPort, agent, offset: int, history: list[dict[str, str]], llm=None
+) -> int:
     """One round: handle new updates, then push approvals/alerts. Returns the next offset."""
     kw = {"llm": llm} if llm else {}
     for update in tg.get_updates(offset, s.telegram_poll_s):

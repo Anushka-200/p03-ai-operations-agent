@@ -33,9 +33,16 @@ def _wipe(owner):
     for (h,) in owner.execute("SELECT phone_hash FROM customers WHERE id = ANY(%s)", (ids,)).fetchall():
         for t in ("checkpoints", "checkpoint_blobs", "checkpoint_writes"):
             owner.execute(f"DELETE FROM {t} WHERE thread_id = %s", (h,))
-    inb = [r[0] for r in owner.execute("SELECT id FROM inbound_messages WHERE customer_id = ANY(%s)", (ids,)).fetchall()]
-    owner.execute("DELETE FROM outbound_messages WHERE customer_id = ANY(%s) OR idempotency_key LIKE ANY(%s)",
-                  (ids, [f"emerg:{i}:%" for i in inb]))
+    inb = [
+        r[0]
+        for r in owner.execute(
+            "SELECT id FROM inbound_messages WHERE customer_id = ANY(%s)", (ids,)
+        ).fetchall()
+    ]
+    owner.execute(
+        "DELETE FROM outbound_messages WHERE customer_id = ANY(%s) OR idempotency_key LIKE ANY(%s)",
+        (ids, [f"emerg:{i}:%" for i in inb]),
+    )
     owner.execute("DELETE FROM emergencies WHERE customer_id = ANY(%s)", (ids,))
     owner.execute("DELETE FROM followups WHERE customer_id = ANY(%s)", (ids,))
     owner.execute("DELETE FROM inbound_messages WHERE customer_id = ANY(%s)", (ids,))
@@ -103,9 +110,14 @@ def test_valid_message_is_saved_then_processed_and_replied_in_dry_run(db):
     assert res.status_code == 200 and "<Response" in res.text
     assert len(agent.calls) == 1
     assert agent.calls[0][0].role == "customer"  # customer id comes from the verified From, not the text
-    sid, processed = rows(db, "SELECT message_sid, processed_at FROM inbound_messages WHERE message_sid='SM-ok-1'")[0]
+    sid, processed = rows(
+        db, "SELECT message_sid, processed_at FROM inbound_messages WHERE message_sid='SM-ok-1'"
+    )[0]
     assert processed is not None
-    out = rows(db, "SELECT status, channel FROM outbound_messages WHERE idempotency_key LIKE 'in:%%:reply' AND body LIKE 'Hi, this is%%' ORDER BY id DESC LIMIT 1")
+    out = rows(
+        db,
+        "SELECT status, channel FROM outbound_messages WHERE idempotency_key LIKE 'in:%%:reply' AND body LIKE 'Hi, this is%%' ORDER BY id DESC LIMIT 1",
+    )
     assert out == [("DRY_RUN", "sms")]
 
 
@@ -124,9 +136,17 @@ def test_emergency_never_reaches_the_agent_and_pages_once(db):
     assert post(client, "SM-em-1", "I smell gas in the kitchen").status_code == 200
     assert post(client, "SM-em-1", "I smell gas in the kitchen").status_code == 200  # duplicate delivery
     assert agent.calls == []
-    assert rows(db, "SELECT count(*) FROM emergencies e JOIN customers c ON c.id=e.customer_id WHERE c.phone=%s", PHONE_A) == [(1,)]
+    assert rows(
+        db,
+        "SELECT count(*) FROM emergencies e JOIN customers c ON c.id=e.customer_id WHERE c.phone=%s",
+        PHONE_A,
+    ) == [(1,)]
     inbound_id = rows(db, "SELECT id FROM inbound_messages WHERE message_sid='SM-em-1'")[0][0]
-    sent = rows(db, "SELECT recipient FROM outbound_messages WHERE idempotency_key LIKE %s ORDER BY id", f"emerg:{inbound_id}:%")
+    sent = rows(
+        db,
+        "SELECT recipient FROM outbound_messages WHERE idempotency_key LIKE %s ORDER BY id",
+        f"emerg:{inbound_id}:%",
+    )
     assert len(sent) == 3 and ("owner",) in sent
     assert rows(db, "SELECT lead_status FROM customers WHERE phone=%s", PHONE_A) == [("EMERGENCY",)]
     # a follow-up message while paused still does not reach the agent
@@ -183,8 +203,14 @@ def test_full_path_webhook_to_graph_to_reply_with_a_restart_between_messages(db)
     post(client, "SM-full-2", "it is blowing warm air")
     conn2.close()
 
-    assert any("Hi, need help" in str(m.get("content")) for m in llm2.calls[0][0])  # remembered across the restart
-    replies = rows(db, "SELECT body FROM outbound_messages WHERE idempotency_key LIKE 'in:%%:reply' AND customer_id=(SELECT id FROM customers WHERE phone=%s) ORDER BY id", PHONE_A)
+    assert any(
+        "Hi, need help" in str(m.get("content")) for m in llm2.calls[0][0]
+    )  # remembered across the restart
+    replies = rows(
+        db,
+        "SELECT body FROM outbound_messages WHERE idempotency_key LIKE 'in:%%:reply' AND customer_id=(SELECT id FROM customers WHERE phone=%s) ORDER BY id",
+        PHONE_A,
+    )
     assert len(replies) == 2 and replies[0][0].startswith("Hi, I'm CoolBreeze's virtual assistant.")
     assert not replies[1][0].startswith("Hi, I'm")
 
@@ -197,4 +223,7 @@ def test_handoff_status_keeps_the_agent_out_but_sends_a_holding_text(db):
     agent.calls.clear()
     post(client, "SM-ho-1", "are you there?", sender=PHONE_B)
     assert agent.calls == []
-    assert rows(db, "SELECT count(*) FROM outbound_messages WHERE idempotency_key LIKE 'handoff-hold:%%'")[0][0] >= 1
+    assert (
+        rows(db, "SELECT count(*) FROM outbound_messages WHERE idempotency_key LIKE 'handoff-hold:%%'")[0][0]
+        >= 1
+    )

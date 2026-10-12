@@ -29,7 +29,12 @@ class TwilioSender:
         self, account_sid: str, auth_token: str, sms_from: str, whatsapp_from: str = "",
         client: httpx.Client | None = None, breaker: CircuitBreaker | None = None, whatsapp_content_sid: str = "",
     ) -> None:  # fmt: skip
-        self.sid, self._token, self.sms_from, self.whatsapp_from = account_sid, auth_token, sms_from, whatsapp_from
+        self.sid, self._token, self.sms_from, self.whatsapp_from = (
+            account_sid,
+            auth_token,
+            sms_from,
+            whatsapp_from,
+        )
         # A trial/sandbox account may refuse free text over the API (error 21654) and accept only an approved
         # template. When set, WhatsApp sends use the template (its fixed text; our body is NOT sent).
         self.whatsapp_content_sid = whatsapp_content_sid
@@ -54,7 +59,9 @@ class TwilioSender:
         return str(resp.json()["sid"])
 
 
-def deliver_outbox(ctx: ToolContext, sender: TwilioSender, allowed_to: Collection[str], limit: int = 20) -> dict[str, int]:
+def deliver_outbox(
+    ctx: ToolContext, sender: TwilioSender, allowed_to: Collection[str], limit: int = 20
+) -> dict[str, int]:
     """Send QUEUED customer/technician messages. Telegram rows belong to the bot, not to Twilio."""
     counts = {"sent": 0, "failed": 0, "blocked": 0, "deferred": 0}
     rows = ctx.conn.execute(

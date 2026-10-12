@@ -237,5 +237,5 @@ def handoff_to_human(ctx: ToolContext, caller: Caller, a: HandoffArgs) -> dict[s
     return {
         "ok": True,
         "message": "The team has been notified. If the customer is upset, begin your reply with a short, sincere "
-        "apology (\"I'm sorry about that\"). Then tell the customer someone will follow up.",
+        'apology ("I\'m sorry about that"). Then tell the customer someone will follow up.',
     }

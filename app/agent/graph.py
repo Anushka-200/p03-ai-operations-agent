@@ -26,9 +26,7 @@ from app.tools import REGISTRY, Caller, ToolContext, run_tool
 
 logger = logging.getLogger(__name__)
 
-HANDOFF_TEXT = (
-    "Thanks for your patience. I'm passing this to a team member who will text you back shortly."
-)
+HANDOFF_TEXT = "Thanks for your patience. I'm passing this to a team member who will text you back shortly."
 LLM_DOWN_TEXT = "Sorry, I'm having trouble right now. A team member will text you back shortly."
 
 
@@ -47,7 +45,9 @@ def add_messages(left: list[dict[str, Any]], right: list[dict[str, Any]]) -> lis
 class State(TypedDict, total=False):
     messages: Annotated[list[dict[str, Any]], add_messages]  # the conversation (OpenAI-shaped dicts)
     summary: str  # compacted memory of the turns that were dropped from `messages`
-    specialist: str  # supervisor mode: which specialist handles this message ('single' = one agent, all tools)
+    specialist: (
+        str  # supervisor mode: which specialist handles this message ('single' = one agent, all tools)
+    )
     # per message (reset by the input of each turn)
     turn_tool_calls: int
     reply: str | None
@@ -78,12 +78,19 @@ def customer_tools(caller: Caller, only: frozenset[str] | None = None) -> list[d
         if gate.role_decision(name, caller.role) is None:
             schema = spec.args_model.model_json_schema()
             schema.pop("title", None)
-            out.append({"type": "function", "function": {"name": name, "description": spec.description, "parameters": schema}})
+            out.append(
+                {
+                    "type": "function",
+                    "function": {"name": name, "description": spec.description, "parameters": schema},
+                }
+            )
     return out
 
 
 def _profile(ctx: ToolContext, caller: Caller) -> dict[str, str | None]:
-    row = ctx.conn.execute("SELECT name, address, zip FROM customers WHERE id=%s", (caller.customer_id,)).fetchone()
+    row = ctx.conn.execute(
+        "SELECT name, address, zip FROM customers WHERE id=%s", (caller.customer_id,)
+    ).fetchone()
     return {"name": row[0], "address": row[1], "zip": row[2]} if row else {}
 
 
@@ -168,7 +175,9 @@ def route_node(state: State, config) -> dict[str, Any]:
     return {"specialist": name, **(_spent(state, res) if res is not None else {})}
 
 
-LEAN_HIDDEN = frozenset({"list_services", "get_price", "check_service_area"})  # replaced by the prompt catalog
+LEAN_HIDDEN = frozenset(
+    {"list_services", "get_price", "check_service_area"}
+)  # replaced by the prompt catalog
 
 
 def _catalog(ctx: ToolContext) -> str:
@@ -240,13 +249,19 @@ def tools_node(state: State, config) -> dict[str, Any]:
                 raise ValueError("arguments must be an object")
             result = run_tool(ctx, caller, name, args)
         except ValueError:
-            result = {"ok": False, "error": "invalid_arguments", "message": "Arguments must be a JSON object."}
+            result = {
+                "ok": False,
+                "error": "invalid_arguments",
+                "message": "Arguments must be a JSON object.",
+            }
         if result.get("error") == "needs_approval":
             pending.append(result["approval_id"])
         if result.get("ok") and result.get("booking_id") and result.get("status") == "BOOKED":
             booked.append(result["booking_id"])
         _collect_amounts(result, amounts)
-        results.append({"role": "tool", "tool_call_id": call["id"], "content": json.dumps(result, default=str)})
+        results.append(
+            {"role": "tool", "tool_call_id": call["id"], "content": json.dumps(result, default=str)}
+        )
     return {
         "messages": results,
         "turn_tool_calls": state.get("turn_tool_calls", 0) + len(calls),
@@ -277,7 +292,12 @@ def guard_node(state: State, config) -> dict[str, Any]:
     out: dict[str, Any] = {}
     problem = guard.check_reply(text, allowed, booked) if text else "the reply was empty"
     if problem:
-        logger.warning("output guard blocked a reply: %s | draft: %s", problem, text[:160], extra={"problem": problem, "draft_preview": text[:160]})
+        logger.warning(
+            "output guard blocked a reply: %s | draft: %s",
+            problem,
+            text[:160],
+            extra={"problem": problem, "draft_preview": text[:160]},
+        )
         try:  # one repair attempt, then a safe fallback: never loop on a misbehaving model
             res = llm(
                 [{"role": "system", "content": _system(state, ctx, c["caller"])},
@@ -354,7 +374,9 @@ def build_graph(checkpointer):
     g.add_edge("route", "agent")
     g.add_conditional_edges("agent", after_agent, {"tools": "tools", "guard": "guard", "handoff": "handoff"})
     g.add_conditional_edges("tools", lambda s: "agent", {"agent": "agent"})
-    g.add_conditional_edges("guard", after_guard, {"approval_wait": "approval_wait", "handoff": "handoff", "end": END})
+    g.add_conditional_edges(
+        "guard", after_guard, {"approval_wait": "approval_wait", "handoff": "handoff", "end": END}
+    )
     g.add_edge("approval_wait", "agent")
     g.add_edge("handoff", END)
     return g.compile(checkpointer=checkpointer)

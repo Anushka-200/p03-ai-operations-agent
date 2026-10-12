@@ -28,7 +28,9 @@ class Settings(BaseSettings):
     # Used when the default model keeps failing (provider incident): a different, stronger model.
     llm_fallback_model: str = "claude-sonnet-5-5"
     llm_timeout_s: float = 30.0
-    llm_prompt_caching: bool = False  # experiment E2: cache the system prompt + tool schemas
+    llm_prompt_caching: bool = (
+        True  # E2: cache the system prompt + tool schemas (-50% cost, measured); frozen ON
+    )
     llm_max_retries: int = 3
     # Cost guard (CLAUDE.md spend rules): ask the owner above this many dollars.
     cost_confirm_above_usd: float = 0.50
@@ -40,8 +42,12 @@ class Settings(BaseSettings):
     agent_max_output_tokens: int = 1024
     # Compaction (context engineering): above this many (estimated) history tokens, older turns are
     # summarised and only the last few customer turns stay verbatim. Switchable for experiment E4.
-    agent_mode: Literal["single", "supervisor"] = "single"  # single | supervisor (ADR 006): one agent with all tools, or a router + 2 specialists
-    agent_tool_mode: Literal["classic", "lean"] = "classic"  # lean (E3): price table in the prompt, ZIP check merged into update_my_contact
+    agent_mode: Literal["single", "supervisor"] = (
+        "single"  # single | supervisor (ADR 006): one agent with all tools, or a router + 2 specialists
+    )
+    agent_tool_mode: Literal["classic", "lean"] = (
+        "lean"  # E3: price table in the prompt, ZIP check merged into update_my_contact (-31% tool calls, measured); frozen lean
+    )
     llm_agent_model: str = ""  # E1: model for the agent step only ("" = llm_default_model)
     agent_compaction_enabled: bool = True
     agent_compact_above_tokens: int = 6000

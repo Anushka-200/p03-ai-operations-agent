@@ -40,7 +40,9 @@ def env(ctx):
     setup_checkpointer()
     conn = psycopg.connect(get_settings().database_url, autocommit=True, row_factory=dict_row)
     graph = build_graph(PostgresSaver(conn))
-    ctx.settings = ctx.settings.model_copy(update={"agent_compact_above_tokens": 600, "agent_compact_keep_turns": 3})
+    ctx.settings = ctx.settings.model_copy(
+        update={"agent_compact_above_tokens": 600, "agent_compact_keep_turns": 3}
+    )
     yield graph
     conn.close()
     with psycopg.connect(get_settings().migrator_database_url, autocommit=True) as o:
@@ -58,8 +60,13 @@ def stored(agent, ctx, c):
 
 
 def test_reducer_appends_normally_and_replaces_on_marker():
-    assert add_messages([{"role": "user"}], [{"role": "assistant"}]) == [{"role": "user"}, {"role": "assistant"}]
-    assert add_messages([{"role": "user"}, {"role": "assistant"}], [{"role": REPLACE}, {"role": "user", "content": "kept"}]) == [{"role": "user", "content": "kept"}]
+    assert add_messages([{"role": "user"}], [{"role": "assistant"}]) == [
+        {"role": "user"},
+        {"role": "assistant"},
+    ]
+    assert add_messages(
+        [{"role": "user"}, {"role": "assistant"}], [{"role": REPLACE}, {"role": "user", "content": "kept"}]
+    ) == [{"role": "user", "content": "kept"}]
 
 
 def test_short_chats_are_never_compacted(ctx, env):
@@ -93,7 +100,10 @@ def test_history_shrinks_compared_with_no_compaction(ctx, env):
     chat(on, ctx, c1, 10)
     ctx.settings = ctx.settings.model_copy(update={"agent_compaction_enabled": False})
     chat(off, ctx, c2, 10)
-    assert estimate_tokens(stored(on, ctx, c1)["messages"]) < estimate_tokens(stored(off, ctx, c2)["messages"]) / 2
+    assert (
+        estimate_tokens(stored(on, ctx, c1)["messages"])
+        < estimate_tokens(stored(off, ctx, c2)["messages"]) / 2
+    )
 
 
 def test_tool_call_and_result_are_never_separated(ctx, env):
@@ -102,7 +112,12 @@ def test_tool_call_and_result_are_never_separated(ctx, env):
     router = Router()
 
     def llm(messages, **kw):
-        if kw.get("name") == "agent" and messages[-1]["role"] == "user" and "message 4" in messages[-1]["content"] and not steps:
+        if (
+            kw.get("name") == "agent"
+            and messages[-1]["role"] == "user"
+            and "message 4" in messages[-1]["content"]
+            and not steps
+        ):
             steps.append(1)
             return call("list_services", {})  # a tool round inside the turn that straddles the cut
         return router(messages, **kw)
@@ -131,8 +146,15 @@ def test_booking_facts_survive_compaction_because_they_live_in_state_not_in_mess
     router = Router()
 
     def llm(messages, **kw):
-        if kw.get("name") == "agent" and messages[-1]["role"] == "user" and "message 0" in messages[-1]["content"]:
-            return call("book_appointment", {"slot_id": slot, "service_code": "ac_diagnostic", "idempotency_key": "bk-607-aaaa"})
+        if (
+            kw.get("name") == "agent"
+            and messages[-1]["role"] == "user"
+            and "message 0" in messages[-1]["content"]
+        ):
+            return call(
+                "book_appointment",
+                {"slot_id": slot, "service_code": "ac_diagnostic", "idempotency_key": "bk-607-aaaa"},
+            )
         if kw.get("name") == "agent" and messages[-1]["role"] == "tool":
             return say("You're booked!")
         return router(messages, **kw)
@@ -141,4 +163,6 @@ def test_booking_facts_survive_compaction_because_they_live_in_state_not_in_mess
     chat(agent, ctx, c, 9)
     state = stored(agent, ctx, c)
     assert state["booked_ids"] and "compaction" in router.names()
-    assert json.dumps(state["messages"]).count("book_appointment") == 0  # the tool exchange itself was compacted away
+    assert (
+        json.dumps(state["messages"]).count("book_appointment") == 0
+    )  # the tool exchange itself was compacted away

@@ -23,7 +23,13 @@ def list_cases(ctx: ToolContext) -> list[dict[str, Any]]:
         (list(OPEN_STATUSES),),
     ).fetchall()
     return [
-        {"customer_id": r[0], "name": clean_text(r[1])[:60] if r[1] else None, "phone": r[2], "status": r[3], "since": r[4]}
+        {
+            "customer_id": r[0],
+            "name": clean_text(r[1])[:60] if r[1] else None,
+            "phone": r[2],
+            "status": r[3],
+            "since": r[4],
+        }
         for r in rows
     ]
 
@@ -49,7 +55,10 @@ def clear_case(ctx: ToolContext, customer_id: int, cleared_by: str) -> dict[str,
         if row is None:
             return {"ok": False, "message": f"No customer #{customer_id}."}
         if row[0] not in OPEN_STATUSES:
-            return {"ok": False, "message": f"Customer #{customer_id} is not waiting for a person (status {row[0]})."}
+            return {
+                "ok": False,
+                "message": f"Customer #{customer_id} is not waiting for a person (status {row[0]}).",
+            }
         booked = ctx.conn.execute(
             "SELECT 1 FROM bookings WHERE customer_id = %s AND status = 'BOOKED' AND end_at > %s LIMIT 1",
             (customer_id, ctx.now()),

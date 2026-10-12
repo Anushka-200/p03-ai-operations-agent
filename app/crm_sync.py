@@ -50,7 +50,13 @@ def process_outbox(ctx: ToolContext, limit: int = 20) -> dict[str, int]:
                 assert b is not None
                 deal_id = ctx.crm.upsert_deal(
                     contact_id,
-                    dict(zip(("id", "service", "start", "price", "discount", "status", "crm_deal_id"), b, strict=True)),
+                    dict(
+                        zip(
+                            ("id", "service", "start", "price", "discount", "status", "crm_deal_id"),
+                            b,
+                            strict=True,
+                        )
+                    ),
                 )
                 ctx.conn.execute("UPDATE bookings SET crm_deal_id = %s WHERE id = %s", (deal_id, b[0]))
             ctx.conn.execute("UPDATE crm_outbox SET status = 'DONE' WHERE id = %s", (row_id,))

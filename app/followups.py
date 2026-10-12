@@ -103,7 +103,9 @@ def tick(ctx: ToolContext) -> dict[str, int]:
                 reason = "booking_not_active"
             else:
                 when = local_label(b[1])
-        elif ctx.conn.execute("SELECT 1 FROM bookings WHERE customer_id=%s AND status='BOOKED'", (cid,)).fetchone():
+        elif ctx.conn.execute(
+            "SELECT 1 FROM bookings WHERE customer_id=%s AND status='BOOKED'", (cid,)
+        ).fetchone():
             reason = "already_booked"
         if reason:
             _finish(ctx, fid, "SKIPPED", reason)
@@ -119,7 +121,10 @@ def tick(ctx: ToolContext) -> dict[str, int]:
             "SELECT channel FROM inbound_messages WHERE customer_id=%s ORDER BY id DESC LIMIT 1", (cid,)
         ).fetchone()
         ctx.messaging.send(
-            customer_id=cid, channel=row[0] if row else "sms", body=body, idempotency_key=f"followup:{cid}:{rule}"
+            customer_id=cid,
+            channel=row[0] if row else "sms",
+            body=body,
+            idempotency_key=f"followup:{cid}:{rule}",
         )
         gate.audit(ctx, Caller("system", cid), "followup_send", {"rule": rule}, "ALLOW", None, rule)
         _finish(ctx, fid, "SENT")

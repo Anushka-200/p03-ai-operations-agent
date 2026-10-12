@@ -25,7 +25,9 @@ import psycopg
 PORT = 8013  # not 8003, so the demo never collides with a compose-run API
 PHONE, GAS_PHONE = "+15125559101", "+15125559102"
 os.environ.update(
-    TWILIO_WEBHOOK_URL=f"http://localhost:{PORT}/webhooks/twilio", TWILIO_AUTH_TOKEN="demo-token", DRY_RUN="true"
+    TWILIO_WEBHOOK_URL=f"http://localhost:{PORT}/webhooks/twilio",
+    TWILIO_AUTH_TOKEN="demo-token",
+    DRY_RUN="true",
 )
 
 from app.api.twilio_signature import compute_signature  # noqa: E402
@@ -64,8 +66,19 @@ def cleanup() -> None:
                 "DELETE FROM outbound_messages WHERE customer_id=%s OR idempotency_key LIKE ANY(%s)",
                 (cid, [f"emerg:{i}:%" for i in inb] + [f"handoff:{cid}:%"]),
             )
-            o.execute("DELETE FROM calendar_events WHERE booking_id IN (SELECT id FROM bookings WHERE customer_id=%s)", (cid,))
-            for t in ("crm_outbox", "bookings", "approvals", "followups", "inbound_messages", "emergencies", "audit_log"):
+            o.execute(
+                "DELETE FROM calendar_events WHERE booking_id IN (SELECT id FROM bookings WHERE customer_id=%s)",
+                (cid,),
+            )
+            for t in (
+                "crm_outbox",
+                "bookings",
+                "approvals",
+                "followups",
+                "inbound_messages",
+                "emergencies",
+                "audit_log",
+            ):
                 o.execute(f"DELETE FROM {t} WHERE customer_id=%s", (cid,))
             o.execute("DELETE FROM idempotency_keys WHERE key LIKE %s", (f"%:{cid}:%",))
             o.execute("DELETE FROM customers WHERE id=%s", (cid,))
@@ -73,7 +86,17 @@ def cleanup() -> None:
 
 def start_server() -> subprocess.Popen:
     proc = subprocess.Popen(
-        [sys.executable, "-m", "uvicorn", "app.api.main:create_app", "--factory", "--port", str(PORT), "--log-level", "warning"],
+        [
+            sys.executable,
+            "-m",
+            "uvicorn",
+            "app.api.main:create_app",
+            "--factory",
+            "--port",
+            str(PORT),
+            "--log-level",
+            "warning",
+        ],
         env=os.environ.copy(),
     )
     for _ in range(60):
@@ -94,9 +117,14 @@ def send(sid: str, phone: str, text: str) -> str:
     assert r.status_code == 200, r.text
     with psycopg.connect(s.migrator_database_url, autocommit=True) as c:
         for _ in range(120):  # the reply is produced in the background; wait for it (max ~60 s)
-            row = c.execute("SELECT id, processed_at FROM inbound_messages WHERE message_sid=%s", (sid,)).fetchone()
+            row = c.execute(
+                "SELECT id, processed_at FROM inbound_messages WHERE message_sid=%s", (sid,)
+            ).fetchone()
             if row and row[1]:
-                rep = c.execute("SELECT body FROM outbound_messages WHERE idempotency_key LIKE %s ORDER BY id LIMIT 1", (f"in:{row[0]}:%",)).fetchone()
+                rep = c.execute(
+                    "SELECT body FROM outbound_messages WHERE idempotency_key LIKE %s ORDER BY id LIMIT 1",
+                    (f"in:{row[0]}:%",),
+                ).fetchone()
                 return rep[0] if rep else "(no reply)"
             time.sleep(0.5)
     return "(timed out)"
@@ -120,7 +148,9 @@ def main() -> None:
 
         with psycopg.connect(s.migrator_database_url, autocommit=True) as c:
             cid = c.execute("SELECT id FROM customers WHERE phone=%s", (PHONE,)).fetchone()[0]
-            appr = c.execute("SELECT id, kind, status FROM approvals WHERE customer_id=%s ORDER BY id DESC LIMIT 1", (cid,)).fetchone()
+            appr = c.execute(
+                "SELECT id, kind, status FROM approvals WHERE customer_id=%s ORDER BY id DESC LIMIT 1", (cid,)
+            ).fetchone()
         say("3. The discount is held for the owner")
         print("approval queue:", appr)
 
@@ -149,8 +179,16 @@ def main() -> None:
                 " ORDER BY o.id DESC LIMIT 14", (PHONE, GAS_PHONE),
             ):  # fmt: skip
                 print(f"  [{status:7}] {chan:8} -> {who:12} {body[:110]!r}")
-            print("bookings:", c.execute("SELECT status, discount_pct, price_usd FROM bookings WHERE customer_id=%s", (cid,)).fetchall())
-            print("audit rows for Maria:", c.execute("SELECT count(*) FROM audit_log WHERE customer_id=%s", (cid,)).fetchone()[0])
+            print(
+                "bookings:",
+                c.execute(
+                    "SELECT status, discount_pct, price_usd FROM bookings WHERE customer_id=%s", (cid,)
+                ).fetchall(),
+            )
+            print(
+                "audit rows for Maria:",
+                c.execute("SELECT count(*) FROM audit_log WHERE customer_id=%s", (cid,)).fetchone()[0],
+            )
     finally:
         server.terminate()
         if not keep:

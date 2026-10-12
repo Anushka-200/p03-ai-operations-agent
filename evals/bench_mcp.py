@@ -24,7 +24,12 @@ from app.settings import get_settings
 from app.tools import Caller, ToolContext, run_tool
 
 ROOT = Path(__file__).resolve().parents[1]
-CALLS = [("list_services", {}), ("get_price", {"service_code": "ac_diagnostic"}), ("list_leads", {}), ("list_jobs", {"day": "2026-10-13"})]
+CALLS = [
+    ("list_services", {}),
+    ("get_price", {"service_code": "ac_diagnostic"}),
+    ("list_leads", {}),
+    ("list_jobs", {"day": "2026-10-13"}),
+]
 N = 30
 
 
@@ -34,7 +39,12 @@ def pct(values: list[float], p: float) -> float:
 
 
 async def via_mcp() -> tuple[dict[str, list[float]], dict[str, str], float]:
-    params = StdioServerParameters(command=sys.executable, args=["-m", "app.mcp_server"], cwd=str(ROOT), env={"PHONE_HASH_KEY": "bench-key"})
+    params = StdioServerParameters(
+        command=sys.executable,
+        args=["-m", "app.mcp_server"],
+        cwd=str(ROOT),
+        env={"PHONE_HASH_KEY": "bench-key"},
+    )
     times: dict[str, list[float]] = {n: [] for n, _ in CALLS}
     out: dict[str, str] = {}
     t0 = time.perf_counter()
@@ -45,7 +55,9 @@ async def via_mcp() -> tuple[dict[str, list[float]], dict[str, str], float]:
                 t = time.perf_counter()
                 res = await client.call_tool(name, args)
                 times[name].append(time.perf_counter() - t)
-            out[name] = json.dumps(res.structured_content or getattr(res.content[0], "text", ""), sort_keys=True, default=str)
+            out[name] = json.dumps(
+                res.structured_content or getattr(res.content[0], "text", ""), sort_keys=True, default=str
+            )
     return times, out, startup
 
 
@@ -54,7 +66,13 @@ def in_process() -> tuple[dict[str, list[float]], dict[str, str]]:
     times: dict[str, list[float]] = {n: [] for n, _ in CALLS}
     out: dict[str, str] = {}
     with psycopg.connect(s.database_url, autocommit=True) as conn:
-        ctx = ToolContext(conn=conn, calendar=FakeCalendar(conn), crm=FakeCrm(), messaging=OutboxMessaging(conn, dry_run=True), settings=s)
+        ctx = ToolContext(
+            conn=conn,
+            calendar=FakeCalendar(conn),
+            crm=FakeCrm(),
+            messaging=OutboxMessaging(conn, dry_run=True),
+            settings=s,
+        )
         for name, args in CALLS:
             for _ in range(N):
                 t = time.perf_counter()
@@ -66,7 +84,9 @@ def in_process() -> tuple[dict[str, list[float]], dict[str, str]]:
 
 def normalise(text: str) -> object:
     data = json.loads(text)
-    return data.get("result", data) if isinstance(data, dict) and "result" in data and len(data) == 1 else data
+    return (
+        data.get("result", data) if isinstance(data, dict) and "result" in data and len(data) == 1 else data
+    )
 
 
 def main() -> int:
@@ -79,15 +99,23 @@ def main() -> int:
             mcp_t, mcp_out, startup = asyncio.run(via_mcp())
         finally:
             owner.execute("DELETE FROM audit_log WHERE id > %s", (last,))  # the bench's own audit rows
-    print(f"{'tool':16} {'same result':12} {'in-process p50/p95 ms':24} {'MCP p50/p95 ms':20} {'extra p50 ms':>12}")
+    print(
+        f"{'tool':16} {'same result':12} {'in-process p50/p95 ms':24} {'MCP p50/p95 ms':20} {'extra p50 ms':>12}"
+    )
     extra = []
     for name, _ in CALLS:
-        same = normalise(local_out[name]) == normalise(mcp_out[name]) and '"ok": true' in local_out[name]  # an error on both sides is not "same"
+        same = (
+            normalise(local_out[name]) == normalise(mcp_out[name]) and '"ok": true' in local_out[name]
+        )  # an error on both sides is not "same"
         lp50, lp95 = statistics.median(local_t[name]) * 1000, pct(local_t[name], 0.95) * 1000
         mp50, mp95 = statistics.median(mcp_t[name]) * 1000, pct(mcp_t[name], 0.95) * 1000
         extra.append(mp50 - lp50)
-        print(f"{name:16} {str(same):12} {lp50:9.1f} / {lp95:8.1f}      {mp50:8.1f} / {mp95:7.1f}   {mp50 - lp50:12.1f}")
-    print(f"MCP server start-up + handshake: {startup * 1000:.0f} ms (once per session); mean extra per call: {statistics.mean(extra):.1f} ms")
+        print(
+            f"{name:16} {str(same):12} {lp50:9.1f} / {lp95:8.1f}      {mp50:8.1f} / {mp95:7.1f}   {mp50 - lp50:12.1f}"
+        )
+    print(
+        f"MCP server start-up + handshake: {startup * 1000:.0f} ms (once per session); mean extra per call: {statistics.mean(extra):.1f} ms"
+    )
     return 0
 
 

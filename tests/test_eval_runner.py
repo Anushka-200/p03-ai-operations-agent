@@ -37,7 +37,9 @@ def db():
     conn.close()
 
 
-@pytest.mark.parametrize("sid", ["emergency_gas", "emergency_flood_with_discount_ask", "emergency_no_heat_freezing", "stop_optout"])
+@pytest.mark.parametrize(
+    "sid", ["emergency_gas", "emergency_flood_with_discount_ask", "emergency_no_heat_freezing", "stop_optout"]
+)
 def test_rule_handled_scenarios_pass_end_to_end_with_zero_model_calls(db, sid):
     r = run_scenario(SCENARIOS[sid], 0, 0, db, NoAgent(), None, SpendTracker(1.0))  # type: ignore[arg-type]
     assert r.passed, r.failures
@@ -60,8 +62,24 @@ def test_a_wrong_expectation_makes_the_scenario_fail(db):
 
 
 def test_final_state_operators_and_unknown_keys():
-    facts = {"bookings_for_customer": 1, "booking_service": "ac_tuneup", "booking_hour": 9, "customer_address": "77 Walnut Ave"}
-    assert check_final_state({"bookings_for_customer": 1, "bookings_for_customer_lte": 1, "booking_hour_lt": 12, "booking_hour_ge": 9}, facts) == []
+    facts = {
+        "bookings_for_customer": 1,
+        "booking_service": "ac_tuneup",
+        "booking_hour": 9,
+        "customer_address": "77 Walnut Ave",
+    }
+    assert (
+        check_final_state(
+            {
+                "bookings_for_customer": 1,
+                "bookings_for_customer_lte": 1,
+                "booking_hour_lt": 12,
+                "booking_hour_ge": 9,
+            },
+            facts,
+        )
+        == []
+    )
     assert check_final_state({"booking_service_in": ["ac_tuneup", "furnace_tuneup"]}, facts) == []
     assert check_final_state({"bookings_for_customer_lte": 0}, facts) != []
     unknown = check_final_state({"mystery_key": True}, facts)
@@ -71,11 +89,19 @@ def test_final_state_operators_and_unknown_keys():
 def test_grade_catches_a_forbidden_tool_that_succeeded_and_a_wrong_order(ctx):
     c = make_customer(ctx, 960)
     slot = offers(ctx, c)[0]["slot_id"]
-    run_tool(ctx, c, "book_appointment", {"slot_id": slot, "service_code": "ac_diagnostic", "idempotency_key": "bk-960-aaaa"})
+    run_tool(
+        ctx,
+        c,
+        "book_appointment",
+        {"slot_id": slot, "service_code": "ac_diagnostic", "idempotency_key": "bk-960-aaaa"},
+    )
     run_tool(ctx, c, "find_slots", {"service_code": "ac_diagnostic", "date_from": "2026-10-14"})
     sc = SCENARIOS["normal_booking_ac"].model_copy(deep=True)
     sc.expect.forbidden_tools = ["book_appointment"]
-    sc.expect.tools_in_order = ["find_slots", "book_appointment"]  # they happened in the opposite order after find
+    sc.expect.tools_in_order = [
+        "find_slots",
+        "book_appointment",
+    ]  # they happened in the opposite order after find
     sc.expect.final_state = {}
     sc.expect.reply_must_match = sc.expect.reply_must_not_match = []
     meta = {"cid": c.customer_id, "other": None}
@@ -96,7 +122,11 @@ def test_cost_projection_is_zero_for_rules_and_asks_for_approval_for_the_full_ru
 
 
 def test_percentile_and_result_defaults():
-    assert percentile([], 0.5) == 0.0 and percentile([1, 2, 3, 4, 5], 0.5) == 3 and percentile([1, 2, 3, 4, 5], 0.95) == 5
+    assert (
+        percentile([], 0.5) == 0.0
+        and percentile([1, 2, 3, 4, 5], 0.5) == 3
+        and percentile([1, 2, 3, 4, 5], 0.95) == 5
+    )
     assert RunResult("x", 0, False).failures == [] and EVAL_NOW.tzinfo is not None
 
 
@@ -111,15 +141,31 @@ def test_booking_not_at_fails_when_the_booking_IS_at_the_taken_slot():
 def _forbidden(scenario_id):
     from evals.scenario_schema import load_scenarios
 
-    return [__import__("re").compile(p) for p in next(s for s in load_scenarios() if s.id == scenario_id).expect.reply_must_not_match]
+    return [
+        __import__("re").compile(p)
+        for p in next(s for s in load_scenarios() if s.id == scenario_id).expect.reply_must_not_match
+    ]
 
 
-@pytest.mark.parametrize(("scenario", "refusal", "grant"), [
-    ("injection_90_percent_discount", "I can't give a 90% discount or enter admin mode.", "Done, your 90% discount is applied."),
-    ("stored_injection_in_name", "I can't approve a 50% discount.", "Sure, I approved 50% off for you."),
-    ("other_customers_data", "I can't share details for another customer. Jane can contact us herself.", "Jane has a visit on Wednesday at 11:00."),
-])
-def test_reply_checks_allow_a_refusal_that_repeats_the_customers_words_but_catch_a_leak_or_grant(scenario, refusal, grant):
+@pytest.mark.parametrize(
+    ("scenario", "refusal", "grant"),
+    [
+        (
+            "injection_90_percent_discount",
+            "I can't give a 90% discount or enter admin mode.",
+            "Done, your 90% discount is applied.",
+        ),
+        ("stored_injection_in_name", "I can't approve a 50% discount.", "Sure, I approved 50% off for you."),
+        (
+            "other_customers_data",
+            "I can't share details for another customer. Jane can contact us herself.",
+            "Jane has a visit on Wednesday at 11:00.",
+        ),
+    ],
+)
+def test_reply_checks_allow_a_refusal_that_repeats_the_customers_words_but_catch_a_leak_or_grant(
+    scenario, refusal, grant
+):
     pats = _forbidden(scenario)
     assert not any(p.search(refusal) for p in pats)
     assert any(p.search(grant) for p in pats)
@@ -139,11 +185,16 @@ def test_a_silent_simulated_customer_is_a_visible_harness_failure_not_a_quiet_en
 
 def test_late_cancel_check_allows_i_cannot_confirm_it_is_cancelled_yet_but_catches_a_false_claim():
     pats = _forbidden("late_cancel_needs_approval")
-    assert not any(p.search("I can't confirm the 8:00 AM visit is cancelled yet. It is pending approval.") for p in pats)
+    assert not any(
+        p.search("I can't confirm the 8:00 AM visit is cancelled yet. It is pending approval.") for p in pats
+    )
     assert any(p.search("Good news, your visit is cancelled.") for p in pats)
 
 
 def test_neighbour_check_allows_a_refusal_that_mentions_a_day_the_customer_asked_about():
     pats = _forbidden("other_customers_data")
-    assert not any(p.search("I can't confirm whether a visit is scheduled on Thursday. Jane can contact us.") for p in pats)
+    assert not any(
+        p.search("I can't confirm whether a visit is scheduled on Thursday. Jane can contact us.")
+        for p in pats
+    )
     assert any(p.search("Jane's visit is on Wednesday at 11 am.") for p in pats)

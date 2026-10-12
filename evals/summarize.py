@@ -31,7 +31,9 @@ def row(label: str) -> str:
 
 
 def main(labels: list[str]) -> None:
-    print("| arm | scenarios x runs | per-run pass | scenarios passing all runs | forbidden executed | tool calls / booking | model calls / run | $ / conversation | turn p50 / p95 (s) |")
+    print(
+        "| arm | scenarios x runs | per-run pass | scenarios passing all runs | forbidden executed | tool calls / booking | model calls / run | $ / conversation | turn p50 / p95 (s) |"
+    )
     print("|---|---|---|---|---|---|---|---|---|")
     for label in labels:
         print(row(label))

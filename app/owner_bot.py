@@ -65,6 +65,7 @@ def _who(user_id: Any) -> str:
 
 # ---------------------------------------------------------------- 1. asking questions
 
+
 def owner_chat(
     ctx: ToolContext, text: str, history: list[dict[str, str]], llm: Callable[..., Any] = default_complete
 ) -> str:
@@ -93,28 +94,40 @@ def owner_chat(
                 args = json.loads(call["arguments"] or "{}")
                 result = run_tool(ctx, OWNER, call["name"], args if isinstance(args, dict) else {})
             except ValueError:
-                result = {"ok": False, "error": "invalid_arguments", "message": "Arguments must be a JSON object."}
+                result = {
+                    "ok": False,
+                    "error": "invalid_arguments",
+                    "message": "Arguments must be a JSON object.",
+                }
             if result.get("error") == "needs_approval":
                 # run_tool's text is written for the customer path; here the reader is the owner.
                 result["message"] = (
                     f"Approval request #{result['approval_id']} was created. The owner will see it as a "
                     "message with Approve / Reject buttons. Nothing has been sent yet."
                 )
-            messages.append({"role": "tool", "tool_call_id": call["id"], "content": json.dumps(result, default=str)})
+            messages.append(
+                {"role": "tool", "tool_call_id": call["id"], "content": json.dumps(result, default=str)}
+            )
 
 
 # ---------------------------------------------------------------- 2. pushing approvals and alerts
 
-def describe_approval(ctx: ToolContext, approval_id: int, kind: str, customer_id: int | None, payload: dict[str, Any]) -> str:
+
+def describe_approval(
+    ctx: ToolContext, approval_id: int, kind: str, customer_id: int | None, payload: dict[str, Any]
+) -> str:
     """Plain-text card for the owner. Customer-written strings are cleaned and cut; no markup is parsed."""
     lines = [f"Approval #{approval_id}: {kind.replace('_', ' ')}"]
     if customer_id is not None:
         row = ctx.conn.execute("SELECT name FROM customers WHERE id=%s", (customer_id,)).fetchone()
-        lines.append(f"Customer: {clean_text(row[0])[:60] if row and row[0] else '(name not given)'} (#{customer_id})")
+        lines.append(
+            f"Customer: {clean_text(row[0])[:60] if row and row[0] else '(name not given)'} (#{customer_id})"
+        )
     args = payload.get("args", {})
     if kind == "send_bulk_followup":
         draft = ctx.conn.execute(
-            "SELECT payload FROM approvals WHERE id=%s AND kind='bulk_followup_draft'", (args.get("draft_id"),)
+            "SELECT payload FROM approvals WHERE id=%s AND kind='bulk_followup_draft'",
+            (args.get("draft_id"),),
         ).fetchone()
         if draft:
             lines.append(f"Recipients: {len(draft[0]['recipients'])}")
@@ -163,9 +176,7 @@ def deliver_owner_alerts(ctx: ToolContext, tg: TelegramPort, chat_id: int) -> in
 
 # ---------------------------------------------------------------- 3. the owner taps a button
 
-FALLBACK_TO_CUSTOMER = (
-    "The owner has reviewed your request. A team member will text you the details shortly."
-)
+FALLBACK_TO_CUSTOMER = "The owner has reviewed your request. A team member will text you the details shortly."
 
 
 def _customer_channel(ctx: ToolContext, customer_id: int) -> str:
@@ -193,7 +204,9 @@ def handle_decision(
         return f"{verdict}.{extra}"
     customer_id = row[0]
     try:
-        lock_conversation(ctx.conn, customer_id)  # do not resume while the customer's own message is being handled
+        lock_conversation(
+            ctx.conn, customer_id
+        )  # do not resume while the customer's own message is being handled
         reply = agent.resume_after_approval(ctx, customer_id, decision)
     except Exception:
         logger.exception("resume after approval failed", extra={"approval_id": approval_id})
@@ -212,6 +225,7 @@ def handle_decision(
 
 
 # ---------------------------------------------------------------- the update router
+
 
 def handle_update(
     ctx: ToolContext,
@@ -236,7 +250,12 @@ def handle_update(
 
     if cb:
         parts = str(cb.get("data", "")).split(":")
-        if len(parts) != 3 or parts[0] != CALLBACK_PREFIX or parts[2] not in ("y", "n") or not parts[1].isdigit():
+        if (
+            len(parts) != 3
+            or parts[0] != CALLBACK_PREFIX
+            or parts[2] not in ("y", "n")
+            or not parts[1].isdigit()
+        ):
             tg.answer_callback(cb["id"], "Unknown button")
             return "bad_callback"
         approve = parts[2] == "y"
@@ -254,7 +273,9 @@ def handle_update(
         tg.send_message(chat_id, HELP)
         return "help"
     if text.startswith("/pending"):
-        ctx.conn.execute("UPDATE approvals SET notified_at = NULL WHERE status = 'PENDING'")  # show them again
+        ctx.conn.execute(
+            "UPDATE approvals SET notified_at = NULL WHERE status = 'PENDING'"
+        )  # show them again
         ctx.conn.commit()
         n = notify_pending_approvals(ctx, tg, chat_id)
         if n == 0:
@@ -265,15 +286,20 @@ def handle_update(
         tg.send_message(chat_id, cases.describe_cases(cases.list_cases(ctx)))
         return "cases"
     if text.startswith("/resume"):
-        arg = text[len("/resume"):].strip().lstrip("#")
+        arg = text[len("/resume") :].strip().lstrip("#")
         if not arg.isdigit():
-            tg.send_message(chat_id, "Send /resume followed by the customer number, for example /resume 12. /cases lists them.")
+            tg.send_message(
+                chat_id,
+                "Send /resume followed by the customer number, for example /resume 12. /cases lists them.",
+            )
             return "resume_usage"
         done = cases.clear_case(ctx, int(arg), "owner:telegram")
         ctx.conn.commit()
         tg.send_message(
             chat_id,
-            f"Customer #{arg} is back with the agent (status {done['status']})." if done["ok"] else done["message"],
+            f"Customer #{arg} is back with the agent (status {done['status']})."
+            if done["ok"]
+            else done["message"],
         )
         return "resumed" if done["ok"] else "resume_failed"
 

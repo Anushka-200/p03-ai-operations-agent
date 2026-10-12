@@ -31,7 +31,9 @@ def _count(ctx, sql, *params):
 
 
 def _booking_row(ctx, booking_id):
-    return ctx.conn.execute("SELECT start_at, technician_id FROM bookings WHERE id=%s", (booking_id,)).fetchone()
+    return ctx.conn.execute(
+        "SELECT start_at, technician_id FROM bookings WHERE id=%s", (booking_id,)
+    ).fetchone()
 
 
 def _resched(ctx, c, booking_id, slot_id, key="resched-edge-1"):
@@ -40,6 +42,7 @@ def _resched(ctx, c, booking_id, slot_id, key="resched-edge-1"):
 
 
 # ---------- rescheduling into a slot that is not free ----------
+
 
 def test_reschedule_into_a_busy_calendar_block_is_refused_and_nothing_moves(ctx):
     maria = make_customer(ctx, 1)
@@ -67,8 +70,14 @@ def test_reschedule_into_a_slot_another_customer_just_took_is_refused(ctx):
     res = _resched(ctx, maria, mine["booking_id"], taken)  # same technician, same time as Dev
     assert res["ok"] is False and res["error"] == "slot_unavailable"
     assert _booking_row(ctx, mine["booking_id"]) == before
-    assert _count(ctx, "SELECT count(*) FROM bookings a JOIN bookings b ON a.id < b.id AND a.technician_id = b.technician_id"
-                       " AND a.status='BOOKED' AND b.status='BOOKED' AND tstzrange(a.start_at,a.end_at) && tstzrange(b.start_at,b.end_at)") == 0
+    assert (
+        _count(
+            ctx,
+            "SELECT count(*) FROM bookings a JOIN bookings b ON a.id < b.id AND a.technician_id = b.technician_id"
+            " AND a.status='BOOKED' AND b.status='BOOKED' AND tstzrange(a.start_at,a.end_at) && tstzrange(b.start_at,b.end_at)",
+        )
+        == 0
+    )
 
 
 def test_the_database_itself_refuses_an_overlap_even_if_the_code_check_is_skipped(ctx):
@@ -105,7 +114,9 @@ def test_reschedule_when_deleting_the_old_event_fails_leaves_one_event_not_two(c
     before = _booking_row(ctx, booked["booking_id"])
     target = offers(ctx, maria, THU)[0]["slot_id"]
     real_delete = ctx.calendar.delete_event
-    old_event = ctx.conn.execute("SELECT calendar_event_id FROM bookings WHERE id=%s", (booked["booking_id"],)).fetchone()[0]
+    old_event = ctx.conn.execute(
+        "SELECT calendar_event_id FROM bookings WHERE id=%s", (booked["booking_id"],)
+    ).fetchone()[0]
 
     def flaky(event_id):
         if event_id == old_event:
@@ -121,8 +132,13 @@ def test_reschedule_when_deleting_the_old_event_fails_leaves_one_event_not_two(c
 
 # ---------- the CRM follows every change to a booking ----------
 
+
 def _deal_syncs(ctx, booking_id):
-    return _count(ctx, "SELECT count(*) FROM crm_outbox WHERE kind='upsert_deal' AND (payload->>'booking_id')::int = %s", booking_id)
+    return _count(
+        ctx,
+        "SELECT count(*) FROM crm_outbox WHERE kind='upsert_deal' AND (payload->>'booking_id')::int = %s",
+        booking_id,
+    )
 
 
 def test_reschedule_cancel_and_discount_each_queue_a_crm_deal_update(ctx):
@@ -141,6 +157,7 @@ def test_reschedule_cancel_and_discount_each_queue_a_crm_deal_update(ctx):
 
 
 # ---------- one conversation at a time per customer ----------
+
 
 def test_a_second_connection_waits_for_the_customers_conversation_lock(ctx):
     other = psycopg.connect(get_settings().database_url)
@@ -161,8 +178,11 @@ def test_a_second_connection_waits_for_the_customers_conversation_lock(ctx):
 
 # ---------- emergencies carry a number to call; /cases and /resume ----------
 
+
 def _escalate(ctx, c):
-    ctx.conn.execute("UPDATE technicians SET on_call = true WHERE id = (SELECT min(id) FROM technicians WHERE active)")
+    ctx.conn.execute(
+        "UPDATE technicians SET on_call = true WHERE id = (SELECT min(id) FROM technicians WHERE active)"
+    )
     ib = ctx.conn.execute(
         "INSERT INTO inbound_messages (message_sid, customer_id, channel, body) VALUES ('SM-edge-1', %s, 'sms', 'gas smell') RETURNING id",
         (c.customer_id,),
@@ -177,19 +197,33 @@ def test_the_page_and_owner_alert_carry_the_phone_but_the_audit_row_does_not(ctx
     texts = [r[0] for r in ctx.conn.execute("SELECT body FROM outbound_messages WHERE customer_id IS NULL")]
     assert any(phone in t and "EMERGENCY" in t for t in texts)
     assert any(phone in t and "Emergency escalated" in t for t in texts)
-    assert all(phone not in str(r) for r in ctx.conn.execute("SELECT args FROM audit_log WHERE tool='emergency_escalation'").fetchall())
+    assert all(
+        phone not in str(r)
+        for r in ctx.conn.execute("SELECT args FROM audit_log WHERE tool='emergency_escalation'").fetchall()
+    )
 
 
 def test_cases_lists_open_emergencies_and_resume_hands_the_customer_back(ctx):
     c = make_customer(ctx, 5)
     _escalate(ctx, c)
     open_cases = cases.list_cases(ctx)
-    assert [x["customer_id"] for x in open_cases] == [c.customer_id] and open_cases[0]["status"] == "EMERGENCY"
-    assert "+15125550005" in cases.describe_cases(open_cases) and "/resume" in cases.describe_cases(open_cases)
+    assert [x["customer_id"] for x in open_cases] == [c.customer_id] and open_cases[0][
+        "status"
+    ] == "EMERGENCY"
+    assert "+15125550005" in cases.describe_cases(open_cases) and "/resume" in cases.describe_cases(
+        open_cases
+    )
     done = cases.clear_case(ctx, c.customer_id, "owner:test")
     assert done == {"ok": True, "status": "QUALIFYING", "was": "EMERGENCY"}
     assert cases.list_cases(ctx) == []
-    assert _count(ctx, "SELECT count(*) FROM emergencies WHERE customer_id=%s AND cleared_at IS NOT NULL AND cleared_by='owner:test'", c.customer_id) == 1
+    assert (
+        _count(
+            ctx,
+            "SELECT count(*) FROM emergencies WHERE customer_id=%s AND cleared_at IS NOT NULL AND cleared_by='owner:test'",
+            c.customer_id,
+        )
+        == 1
+    )
     assert any(r[0] == "clear_case" and r[1] == "ALLOW" for r in audit_rows(ctx))
 
 
@@ -213,7 +247,9 @@ def bot(ctx):
 def test_owner_commands_cases_and_resume_work_in_telegram_and_strangers_cannot_use_them(ctx, bot):
     c = make_customer(ctx, 6)
     ctx.conn.execute("UPDATE customers SET lead_status='HANDOFF' WHERE id=%s", (c.customer_id,))
-    assert handle_update(ctx, bot, None, text_update(999, f"/resume {c.customer_id}"), []) == "ignored_not_owner"
+    assert (
+        handle_update(ctx, bot, None, text_update(999, f"/resume {c.customer_id}"), []) == "ignored_not_owner"
+    )
     assert handle_update(ctx, bot, None, text_update(999, "/cases"), []) == "ignored_not_owner"
     assert bot.sent == []
     assert handle_update(ctx, bot, None, text_update(OWNER_ID, "/cases"), []) == "cases"
@@ -222,7 +258,10 @@ def test_owner_commands_cases_and_resume_work_in_telegram_and_strangers_cannot_u
     assert handle_update(ctx, bot, None, text_update(OWNER_ID, "/resume abc"), []) == "resume_usage"
     assert handle_update(ctx, bot, None, text_update(OWNER_ID, f"/resume {c.customer_id}"), []) == "resumed"
     assert "back with the agent" in bot.sent[-1]["text"]
-    assert handle_update(ctx, bot, None, text_update(OWNER_ID, f"/resume {c.customer_id}"), []) == "resume_failed"
+    assert (
+        handle_update(ctx, bot, None, text_update(OWNER_ID, f"/resume {c.customer_id}"), [])
+        == "resume_failed"
+    )
 
 
 def test_after_resume_the_agent_answers_that_customer_again(ctx):
@@ -236,7 +275,10 @@ def test_after_resume_the_agent_answers_that_customer_again(ctx):
         return "Hi again"
 
     def inbound(sid):
-        i = ctx.conn.execute("INSERT INTO inbound_messages (message_sid, customer_id, channel, body) VALUES (%s, %s, 'sms', 'hello') RETURNING id", (sid, c.customer_id)).fetchone()[0]
+        i = ctx.conn.execute(
+            "INSERT INTO inbound_messages (message_sid, customer_id, channel, body) VALUES (%s, %s, 'sms', 'hello') RETURNING id",
+            (sid, c.customer_id),
+        ).fetchone()[0]
         return Saved(i, c.customer_id, "sms", duplicate=False)
 
     assert process_inbound(ctx, inbound("SM-h1"), "hello", agent)["route"] == "paused_handoff" and seen == []

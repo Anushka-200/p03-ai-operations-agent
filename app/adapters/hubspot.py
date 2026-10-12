@@ -41,7 +41,10 @@ class HubSpotCrm:
         )  # fmt: skip
 
     def _search(self, obj: str, prop: str, value: str) -> str | None:
-        body = {"filterGroups": [{"filters": [{"propertyName": prop, "operator": "EQ", "value": value}]}], "limit": 1}
+        body = {
+            "filterGroups": [{"filters": [{"propertyName": prop, "operator": "EQ", "value": value}]}],
+            "limit": 1,
+        }
         results = self._req("POST", f"/crm/v3/objects/{obj}/search", json=body).json().get("results", [])
         return str(results[0]["id"]) if results else None
 
@@ -93,5 +96,8 @@ class HubSpotCrm:
         if existing:
             self._req("PATCH", f"/crm/v3/objects/deals/{existing}", json={"properties": props})
             return existing
-        body = {"properties": props, "associations": [{"to": {"id": crm_contact_id}, "types": [DEAL_TO_CONTACT]}]}
+        body = {
+            "properties": props,
+            "associations": [{"to": {"id": crm_contact_id}, "types": [DEAL_TO_CONTACT]}],
+        }
         return str(self._req("POST", "/crm/v3/objects/deals", json=body).json()["id"])

@@ -16,7 +16,9 @@ BOOKED_CLAIM = re.compile(
 )
 
 # "...once the visit is booked", "if it is confirmed": talking about a future or possible booking is not a claim.
-CONDITIONAL = re.compile(r"\b(if|once|when|whenever|after|until|unless|before|whether|as soon as|should)\b", re.IGNORECASE)
+CONDITIONAL = re.compile(
+    r"\b(if|once|when|whenever|after|until|unless|before|whether|as soon as|should)\b", re.IGNORECASE
+)
 
 
 def claims_booking(text: str) -> bool:

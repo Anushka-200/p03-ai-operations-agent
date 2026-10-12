@@ -31,7 +31,9 @@ class Agent:
         self.graph, self.llm = graph, llm
 
     def _config(self, ctx: ToolContext, caller: Caller) -> dict[str, Any]:
-        row = ctx.conn.execute("SELECT phone_hash FROM customers WHERE id=%s", (caller.customer_id,)).fetchone()
+        row = ctx.conn.execute(
+            "SELECT phone_hash FROM customers WHERE id=%s", (caller.customer_id,)
+        ).fetchone()
         assert row is not None, "the caller's customer must exist"
         return {"configurable": {"thread_id": row[0], "ctx": ctx, "caller": caller, "llm": self.llm}}
 

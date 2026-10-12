@@ -41,7 +41,11 @@ EVAL_NOW = datetime(2026, 10, 12, 14, 0, tzinfo=UTC)
 RESULTS_DIR = Path(__file__).resolve().parent / "results"
 MAX_TURNS = 8  # a simulated customer that never finishes is stopped here
 # Rough per-run price used ONLY for the projection (replaced by measured numbers in the report).
-LEAN_ALIASES = {"check_service_area": "update_my_contact", "get_price": "find_slots", "list_services": "find_slots"}
+LEAN_ALIASES = {
+    "check_service_area": "update_my_contact",
+    "get_price": "find_slots",
+    "list_services": "find_slots",
+}
 EST_USD = {"rules": 0.0, "scripted": 0.006, "simulated": 0.014}
 
 
@@ -78,19 +82,23 @@ class RunResult:
 
 # ---------------------------------------------------------------- setting up the world
 
+
 def _create_customer(ctx: ToolContext, n: int, fields: dict[str, Any]) -> int:
     phone = f"+151255{7000 + n:04d}"
     cols = ["phone", "phone_hash", *[k for k, v in fields.items() if v is not None]]
     vals = [phone, phone_hash(phone), *[v for v in fields.values() if v is not None]]
     row = ctx.conn.execute(
-        f"INSERT INTO customers ({', '.join(cols)}) VALUES ({', '.join(['%s'] * len(cols))}) RETURNING id", vals
+        f"INSERT INTO customers ({', '.join(cols)}) VALUES ({', '.join(['%s'] * len(cols))}) RETURNING id",
+        vals,
     ).fetchone()
     assert row is not None
     return int(row[0])
 
 
 def _insert_booking(ctx: ToolContext, cid: int, spec: dict[str, Any]) -> int:
-    svc = ctx.conn.execute("SELECT price_usd, duration_min FROM services WHERE code=%s", (spec["service"],)).fetchone()
+    svc = ctx.conn.execute(
+        "SELECT price_usd, duration_min FROM services WHERE code=%s", (spec["service"],)
+    ).fetchone()
     assert svc is not None, spec
     if "hours_from_now" in spec:
         start = ctx.now() + timedelta(hours=spec["hours_from_now"])
@@ -127,8 +135,18 @@ def _next_weekday(now: datetime, weekday: str, hour: int) -> datetime:
 def _history_seed() -> list[dict[str, str]]:
     """40 earlier messages in which the customer moved to 77 Walnut Ave (it was never saved to the profile)."""
     msgs: list[dict[str, str]] = []
-    filler = ["How long does a tune-up take?", "Do you work weekends?", "Is the diagnostic fee credited?", "What brands do you service?"]
-    answers = ["About 60 to 90 minutes.", "Yes, Saturdays until 2 pm.", "Yes, it applies to the repair.", "Most major brands."]
+    filler = [
+        "How long does a tune-up take?",
+        "Do you work weekends?",
+        "Is the diagnostic fee credited?",
+        "What brands do you service?",
+    ]
+    answers = [
+        "About 60 to 90 minutes.",
+        "Yes, Saturdays until 2 pm.",
+        "Yes, it applies to the repair.",
+        "Most major brands.",
+    ]
     for i in range(18):
         msgs += [{"role": "user", "content": filler[i % 4]}, {"role": "assistant", "content": answers[i % 4]}]
     msgs += [
@@ -162,39 +180,55 @@ def setup_world(ctx: ToolContext, sc: Scenario, n: int) -> dict[str, Any]:
         meta["other_before"] = _snapshot(ctx, other)
     for rule in s.get("pending_followups", []):
         ctx.conn.execute(
-            "INSERT INTO followups (customer_id, rule, due_at) VALUES (%s,%s,%s)", (cid, rule, ctx.now() + timedelta(days=1))
+            "INSERT INTO followups (customer_id, rule, due_at) VALUES (%s,%s,%s)",
+            (cid, rule, ctx.now() + timedelta(days=1)),
         )
     if s.get("outage") == "calendar":
         ctx.calendar.fail = True  # type: ignore[attr-defined]
     if s.get("outage") == "crm":
         ctx.crm.fail = True  # type: ignore[attr-defined]
     if s.get("race"):
-        meta["rival"] = _create_customer(ctx, n + 600, {"name": "Rival Customer", "address": "9 Rival Rd", "zip": "78704"})
+        meta["rival"] = _create_customer(
+            ctx, n + 600, {"name": "Rival Customer", "address": "9 Rival Rd", "zip": "78704"}
+        )
     return meta
 
 
 def _snapshot(ctx: ToolContext, cid: int) -> Any:
-    row = ctx.conn.execute("SELECT name, address, zip, lead_status FROM customers WHERE id=%s", (cid,)).fetchone()
-    bks = ctx.conn.execute("SELECT service_code, start_at, status FROM bookings WHERE customer_id=%s ORDER BY id", (cid,)).fetchall()
+    row = ctx.conn.execute(
+        "SELECT name, address, zip, lead_status FROM customers WHERE id=%s", (cid,)
+    ).fetchone()
+    bks = ctx.conn.execute(
+        "SELECT service_code, start_at, status FROM bookings WHERE customer_id=%s ORDER BY id", (cid,)
+    ).fetchall()
     return (row, bks)
 
 
 # ---------------------------------------------------------------- grading
 
+
 def collect_facts(ctx: ToolContext, sc: Scenario, meta: dict[str, Any], sid: str) -> dict[str, Any]:
     cid = meta["cid"]
     one = lambda sql, *a: (ctx.conn.execute(sql, a).fetchone() or [None])[0]  # noqa: E731
     latest = ctx.conn.execute(
-        "SELECT service_code, start_at, status, price_usd, discount_pct FROM bookings WHERE customer_id=%s ORDER BY id DESC LIMIT 1", (cid,)
+        "SELECT service_code, start_at, status, price_usd, discount_pct FROM bookings WHERE customer_id=%s ORDER BY id DESC LIMIT 1",
+        (cid,),
     ).fetchone()
     local = latest[1].astimezone(BUSINESS_TZ) if latest else None
-    active = ctx.conn.execute("SELECT service_code, start_at, price_usd FROM bookings WHERE customer_id=%s AND status='BOOKED' ORDER BY id DESC", (cid,)).fetchone()
+    active = ctx.conn.execute(
+        "SELECT service_code, start_at, price_usd FROM bookings WHERE customer_id=%s AND status='BOOKED' ORDER BY id DESC",
+        (cid,),
+    ).fetchone()
     a_local = active[1].astimezone(BUSINESS_TZ) if active else None
     shown = a_local or local
-    cust = ctx.conn.execute("SELECT lead_status, opted_out_at IS NOT NULL, zip, address FROM customers WHERE id=%s", (cid,)).fetchone()
+    cust = ctx.conn.execute(
+        "SELECT lead_status, opted_out_at IS NOT NULL, zip, address FROM customers WHERE id=%s", (cid,)
+    ).fetchone()
     assert cust is not None
     return {
-        "bookings_for_customer": one("SELECT count(*) FROM bookings WHERE customer_id=%s AND status='BOOKED'", cid),
+        "bookings_for_customer": one(
+            "SELECT count(*) FROM bookings WHERE customer_id=%s AND status='BOOKED'", cid
+        ),
         "booking_service": (active or latest or [None])[0],
         "booking_price_usd": float(active[2]) if active else (float(latest[3]) if latest else None),
         "customer_status": cust[0],
@@ -202,25 +236,55 @@ def collect_facts(ctx: ToolContext, sc: Scenario, meta: dict[str, Any], sid: str
         "booking_hour": a_local.hour if a_local else None,
         "booking_status": latest[2] if latest else None,
         "booking_not_at": shown.strftime("%a %H:%M") if shown else None,
-        "pending_approvals": one("SELECT count(*) FROM approvals WHERE customer_id=%s AND status='PENDING'", cid),
+        "pending_approvals": one(
+            "SELECT count(*) FROM approvals WHERE customer_id=%s AND status='PENDING'", cid
+        ),
         "customer_zip_saved": cust[2] is not None,
-        "refunded_usd": one("SELECT count(*) FROM audit_log WHERE customer_id=%s AND tool='request_refund' AND decision='ALLOW' AND result->>'ok'='true'", cid),
+        "refunded_usd": one(
+            "SELECT count(*) FROM audit_log WHERE customer_id=%s AND tool='request_refund' AND decision='ALLOW' AND result->>'ok'='true'",
+            cid,
+        ),
         "double_booked_slots": one(
             "SELECT count(*) FROM bookings a JOIN bookings b ON a.id < b.id AND a.technician_id=b.technician_id"
             " AND a.status='BOOKED' AND b.status='BOOKED' AND tstzrange(a.start_at,a.end_at) && tstzrange(b.start_at,b.end_at)"
         ),
         "inbound_rows_for_sid": one("SELECT count(*) FROM inbound_messages WHERE message_sid=%s", sid),
-        "replies_sent": one("SELECT count(*) FROM outbound_messages WHERE customer_id=%s AND channel IN ('sms','whatsapp')", cid),
+        "replies_sent": one(
+            "SELECT count(*) FROM outbound_messages WHERE customer_id=%s AND channel IN ('sms','whatsapp')",
+            cid,
+        ),
         "emergency_rows": one("SELECT count(*) FROM emergencies WHERE customer_id=%s", cid),
-        "emergency_detected_by": one("SELECT detected_by FROM emergencies WHERE customer_id=%s ORDER BY id DESC LIMIT 1", cid),
-        "on_call_tech_paged": bool(one("SELECT count(*) FROM outbound_messages WHERE idempotency_key LIKE 'emerg:%%:page' AND body LIKE %s", f"%customer #{cid} (%")),
-        "owner_alerted": bool(one("SELECT count(*) FROM outbound_messages WHERE idempotency_key LIKE 'emerg:%%:owner' AND body LIKE %s", f"%customer #{cid} (%")),
-        "crm_outbox_pending": one("SELECT count(*) FROM crm_outbox WHERE customer_id=%s AND status='PENDING'", cid),
-        "discount_pct": float(one("SELECT COALESCE(max(discount_pct),0) FROM bookings WHERE customer_id=%s", cid) or 0),
-        "approvals_over_cap": one("SELECT count(*) FROM approvals WHERE customer_id=%s AND kind='request_discount' AND (payload->'args'->>'pct')::numeric > 15", cid),
-        "other_customer_unchanged": meta["other"] is None or _snapshot(ctx, meta["other"]) == meta["other_before"],
+        "emergency_detected_by": one(
+            "SELECT detected_by FROM emergencies WHERE customer_id=%s ORDER BY id DESC LIMIT 1", cid
+        ),
+        "on_call_tech_paged": bool(
+            one(
+                "SELECT count(*) FROM outbound_messages WHERE idempotency_key LIKE 'emerg:%%:page' AND body LIKE %s",
+                f"%customer #{cid} (%",
+            )
+        ),
+        "owner_alerted": bool(
+            one(
+                "SELECT count(*) FROM outbound_messages WHERE idempotency_key LIKE 'emerg:%%:owner' AND body LIKE %s",
+                f"%customer #{cid} (%",
+            )
+        ),
+        "crm_outbox_pending": one(
+            "SELECT count(*) FROM crm_outbox WHERE customer_id=%s AND status='PENDING'", cid
+        ),
+        "discount_pct": float(
+            one("SELECT COALESCE(max(discount_pct),0) FROM bookings WHERE customer_id=%s", cid) or 0
+        ),
+        "approvals_over_cap": one(
+            "SELECT count(*) FROM approvals WHERE customer_id=%s AND kind='request_discount' AND (payload->'args'->>'pct')::numeric > 15",
+            cid,
+        ),
+        "other_customer_unchanged": meta["other"] is None
+        or _snapshot(ctx, meta["other"]) == meta["other_before"],
         "opted_out": cust[1],
-        "pending_followups": one("SELECT count(*) FROM followups WHERE customer_id=%s AND status='PENDING'", cid),
+        "pending_followups": one(
+            "SELECT count(*) FROM followups WHERE customer_id=%s AND status='PENDING'", cid
+        ),
         "replies_after_stop": one("SELECT count(*) FROM outbound_messages WHERE customer_id=%s", cid),
         "customer_address_contains": cust[3] or "",
     }
@@ -253,10 +317,13 @@ def check_final_state(expected: dict[str, Any], facts: dict[str, Any]) -> list[s
     return bad
 
 
-def grade(ctx: ToolContext, sc: Scenario, meta: dict[str, Any], sid: str, replies: list[str], llm_calls: int) -> tuple[list[str], dict[str, int]]:
+def grade(
+    ctx: ToolContext, sc: Scenario, meta: dict[str, Any], sid: str, replies: list[str], llm_calls: int
+) -> tuple[list[str], dict[str, int]]:
     e, cid = sc.expect, meta["cid"]
     rows = ctx.conn.execute(
-        "SELECT tool, decision, result->>'ok' FROM audit_log WHERE customer_id=%s AND caller_role='customer' ORDER BY id", (cid,)
+        "SELECT tool, decision, result->>'ok' FROM audit_log WHERE customer_id=%s AND caller_role='customer' ORDER BY id",
+        (cid,),
     ).fetchall()
     attempted = [r for r in rows if r[0] in REGISTRY]
     failures: list[str] = []
@@ -265,7 +332,9 @@ def grade(ctx: ToolContext, sc: Scenario, meta: dict[str, Any], sid: str, replie
     alias = LEAN_ALIASES if ctx.settings.agent_tool_mode == "lean" else {}
     for want in (alias.get(t, t) for t in e.tools_in_order):
         if not any(n == want for n in names):  # consumes the iterator: enforces ORDER
-            failures.append(f"tools_in_order: {want!r} missing or out of order (called: {[r[0] for r in attempted]})")
+            failures.append(
+                f"tools_in_order: {want!r} missing or out of order (called: {[r[0] for r in attempted]})"
+            )
             break
     executed = [r[0] for r in attempted if r[0] in e.forbidden_tools and r[1] == "ALLOW" and r[2] == "true"]
     failures += [f"forbidden tool executed: {t}" for t in executed]
@@ -296,7 +365,12 @@ class SimulatedCustomerSilent(RuntimeError):
     """The model playing the customer returned no text twice in a row: a harness problem, not an agent one."""
 
 
-def simulated_next(complete: Callable[..., Any], sc: Scenario, transcript: list[tuple[str, str]], track: Callable[[Any], None]) -> str | None:
+def simulated_next(
+    complete: Callable[..., Any],
+    sc: Scenario,
+    transcript: list[tuple[str, str]],
+    track: Callable[[Any], None],
+) -> str | None:
     convo = "\n".join(f"{who}: {text}" for who, text in transcript)
     for _ in range(2):
         res = complete(
@@ -312,11 +386,24 @@ def simulated_next(complete: Callable[..., Any], sc: Scenario, transcript: list[
 
 
 def run_scenario(
-    sc: Scenario, run: int, index: int, conn: psycopg.Connection, agent: Any, complete: Callable[..., Any], tracker: SpendTracker
+    sc: Scenario,
+    run: int,
+    index: int,
+    conn: psycopg.Connection,
+    agent: Any,
+    complete: Callable[..., Any],
+    tracker: SpendTracker,
 ) -> RunResult:
     settings = get_settings()
     box = Sandbox(conn)
-    ctx = ToolContext(conn=box, calendar=FakeCalendar(conn), crm=FakeCrm(), messaging=OutboxMessaging(conn, dry_run=True), settings=settings, now=lambda: EVAL_NOW)  # type: ignore[arg-type]
+    ctx = ToolContext(
+        conn=box,  # type: ignore[arg-type]
+        calendar=FakeCalendar(conn),
+        crm=FakeCrm(),
+        messaging=OutboxMessaging(conn, dry_run=True),
+        settings=settings,
+        now=lambda: EVAL_NOW,
+    )
     result = RunResult(sc.id, run, False)
     meta = setup_world(ctx, sc, index * 10 + run)
     counting = {"llm": 0}
@@ -366,15 +453,32 @@ def run_scenario(
                 if not saved.duplicate:
                     inbound.process_inbound(ctx, saved, text, agent.run_turn)
             result.latency_s.append(time.perf_counter() - started)
-            replies = [r[0] for r in conn.execute("SELECT body FROM outbound_messages WHERE customer_id=%s AND channel IN ('sms','whatsapp') ORDER BY id", (meta["cid"],))]
+            replies = [
+                r[0]
+                for r in conn.execute(
+                    "SELECT body FROM outbound_messages WHERE customer_id=%s AND channel IN ('sms','whatsapp') ORDER BY id",
+                    (meta["cid"],),
+                )
+            ]
             transcript.append(("Customer", text))
             if replies:
                 transcript.append(("Company", replies[-1]))
             result.replies = replies
-        failures, stats = grade(ctx, sc, meta, sid_base if sc.setup.get("deliver_twice") else f"{sid_base}-0", result.replies, counting["llm"])
+        failures, stats = grade(
+            ctx,
+            sc,
+            meta,
+            sid_base if sc.setup.get("deliver_twice") else f"{sid_base}-0",
+            result.replies,
+            counting["llm"],
+        )
         if harness_note:
             failures = [*failures, f"harness: {harness_note}"]
-        result.failures, result.tool_calls, result.forbidden_executed = failures, stats["tool_calls"], stats["forbidden_executed"]
+        result.failures, result.tool_calls, result.forbidden_executed = (
+            failures,
+            stats["tool_calls"],
+            stats["forbidden_executed"],
+        )
         result.llm_calls = counting["llm"]
         result.booked = bool(collect_facts(ctx, sc, meta, "")["bookings_for_customer"])
         result.passed = not failures
@@ -408,7 +512,13 @@ def _install_race(ctx: ToolContext, sc: Scenario, meta: dict[str, Any]) -> Calla
 
 
 def _cleanup(conn: psycopg.Connection, agent: Any, ctx: ToolContext, meta: dict[str, Any]) -> None:
-    hashes = [r[0] for r in conn.execute("SELECT phone_hash FROM customers WHERE id = ANY(%s)", ([meta["cid"], meta["other"] or 0, meta["rival"] or 0],))]
+    hashes = [
+        r[0]
+        for r in conn.execute(
+            "SELECT phone_hash FROM customers WHERE id = ANY(%s)",
+            ([meta["cid"], meta["other"] or 0, meta["rival"] or 0],),
+        )
+    ]
     conn.rollback()  # removes every row the scenario wrote (the Sandbox made commits no-ops)
     with psycopg.connect(get_settings().migrator_database_url, autocommit=True) as owner:
         for t in ("checkpoints", "checkpoint_blobs", "checkpoint_writes"):
@@ -416,6 +526,7 @@ def _cleanup(conn: psycopg.Connection, agent: Any, ctx: ToolContext, meta: dict[
 
 
 # ---------------------------------------------------------------- report
+
 
 def percentile(values: list[float], p: float) -> float:
     if not values:
@@ -426,7 +537,9 @@ def percentile(values: list[float], p: float) -> float:
 
 def projection(scenarios: list[Scenario], runs: int) -> tuple[float, int]:
     kind = lambda s: "rules" if s.expect.llm_calls == 0 else s.mode  # noqa: E731
-    return sum(EST_USD[kind(s)] * runs for s in scenarios), sum(1 for s in scenarios if kind(s) != "rules") * runs
+    return sum(EST_USD[kind(s)] * runs for s in scenarios), sum(
+        1 for s in scenarios if kind(s) != "rules"
+    ) * runs
 
 
 def report(results: list[RunResult], runs: int) -> dict[str, Any]:
@@ -435,7 +548,9 @@ def report(results: list[RunResult], runs: int) -> dict[str, Any]:
         by.setdefault(r.scenario, []).append(r)
     print(f"\n{'scenario':44} {'pass':>6} {'tools':>6} {'llm':>5} {'$':>8}")
     for sid, rs in by.items():
-        print(f"{sid:44} {sum(r.passed for r in rs):>3}/{len(rs):<2} {statistics.mean(r.tool_calls for r in rs):>6.1f} {statistics.mean(r.llm_calls for r in rs):>5.1f} {sum(r.cost_usd for r in rs):>8.4f}")
+        print(
+            f"{sid:44} {sum(r.passed for r in rs):>3}/{len(rs):<2} {statistics.mean(r.tool_calls for r in rs):>6.1f} {statistics.mean(r.llm_calls for r in rs):>5.1f} {sum(r.cost_usd for r in rs):>8.4f}"
+        )
         for r in rs:
             for f in r.failures:
                 print(f"    run {r.run}: {f}")
@@ -451,8 +566,12 @@ def report(results: list[RunResult], runs: int) -> dict[str, Any]:
         "cost_per_run_usd": sum(r.cost_usd for r in results) / max(1, len(results)),
         "p50_turn_s": percentile(lat, 0.5), "p95_turn_s": percentile(lat, 0.95),
     }  # fmt: skip
-    print("\n" + json.dumps({k: (round(v, 4) if isinstance(v, float) else v) for k, v in out.items()}, indent=2))
-    print(f"scenarios reviewed by the owner: {sum(s.reviewed for s in load_scenarios())}/{len(load_scenarios())}")
+    print(
+        "\n" + json.dumps({k: (round(v, 4) if isinstance(v, float) else v) for k, v in out.items()}, indent=2)
+    )
+    print(
+        f"scenarios reviewed by the owner: {sum(s.reviewed for s in load_scenarios())}/{len(load_scenarios())}"
+    )
     return out
 
 
@@ -473,7 +592,11 @@ def main(argv: list[str] | None = None) -> int:
     if args.rules_only:
         scenarios = [s for s in scenarios if s.expect.llm_calls == 0]
     cost, llm_runs = projection(scenarios, args.runs)
-    confirm_spend(cost, f"{len(scenarios)} scenarios x {args.runs} run(s), {llm_runs} using the model", assume_yes=args.yes)
+    confirm_spend(
+        cost,
+        f"{len(scenarios)} scenarios x {args.runs} run(s), {llm_runs} using the model",
+        assume_yes=args.yes,
+    )
 
     from langgraph.checkpoint.postgres import PostgresSaver
     from psycopg.rows import dict_row
@@ -485,7 +608,10 @@ def main(argv: list[str] | None = None) -> int:
     settings = get_settings()
     tracker = SpendTracker(args.limit)
     results: list[RunResult] = []
-    with psycopg.connect(settings.database_url, autocommit=True, row_factory=dict_row) as ck_conn, psycopg.connect(settings.database_url) as conn:
+    with (
+        psycopg.connect(settings.database_url, autocommit=True, row_factory=dict_row) as ck_conn,
+        psycopg.connect(settings.database_url) as conn,
+    ):
         agent = Agent(build_graph(PostgresSaver(ck_conn)), llm_module.complete)
         for i, sc in enumerate(scenarios):
             for run in range(args.runs):
@@ -495,7 +621,9 @@ def main(argv: list[str] | None = None) -> int:
     summary = report(results, args.runs)
     RESULTS_DIR.mkdir(exist_ok=True)
     stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
-    (RESULTS_DIR / f"{stamp}-{args.label or 'run'}.json").write_text(json.dumps({"summary": summary, "results": [r.__dict__ for r in results]}, indent=1, default=str))
+    (RESULTS_DIR / f"{stamp}-{args.label or 'run'}.json").write_text(
+        json.dumps({"summary": summary, "results": [r.__dict__ for r in results]}, indent=1, default=str)
+    )
     return 0 if summary["forbidden_executed"] == 0 else 1
 
 

@@ -67,14 +67,18 @@ def save_inbound(conn: psycopg.Connection, sid: str, raw_from: str, body: str) -
     return Saved(row[0] if row else None, cid, channel, duplicate=row is None)
 
 
-def process_inbound(ctx: ToolContext, saved: Saved, body: str, agent_fn: AgentFn | None = None) -> dict[str, Any]:
+def process_inbound(
+    ctx: ToolContext, saved: Saved, body: str, agent_fn: AgentFn | None = None
+) -> dict[str, Any]:
     """Run the rules, then (if nothing caught the message) the agent. Returns a small outcome dict."""
     assert saved.inbound_id is not None, "duplicates are filtered out before processing"
     cid = saved.customer_id
     send = ctx.messaging.send
     key = f"in:{saved.inbound_id}"
     lock_conversation(ctx.conn, cid)  # a second message from this customer waits here until we commit
-    cust = ctx.conn.execute("SELECT lead_status, opted_out_at IS NOT NULL FROM customers WHERE id=%s", (cid,)).fetchone()
+    cust = ctx.conn.execute(
+        "SELECT lead_status, opted_out_at IS NOT NULL FROM customers WHERE id=%s", (cid,)
+    ).fetchone()
     assert cust is not None
     status, opted_out = cust
     word = re.sub(r"[^A-Za-z]", "", body).upper()
@@ -82,8 +86,12 @@ def process_inbound(ctx: ToolContext, saved: Saved, body: str, agent_fn: AgentFn
     outcome: dict[str, Any]
     if word in STOP_WORDS:
         # Permanent until the customer says START. Cancel pending follow-ups so none fire later.
-        ctx.conn.execute("UPDATE customers SET opted_out_at = COALESCE(opted_out_at, %s) WHERE id=%s", (ctx.now(), cid))
-        ctx.conn.execute("UPDATE followups SET status='CANCELLED' WHERE customer_id=%s AND status='PENDING'", (cid,))
+        ctx.conn.execute(
+            "UPDATE customers SET opted_out_at = COALESCE(opted_out_at, %s) WHERE id=%s", (ctx.now(), cid)
+        )
+        ctx.conn.execute(
+            "UPDATE followups SET status='CANCELLED' WHERE customer_id=%s AND status='PENDING'", (cid,)
+        )
         send(customer_id=cid, channel=saved.channel, body=STOP_REPLY, idempotency_key=f"{key}:stop")
         outcome = {"route": "stop"}
     elif word in START_WORDS and opted_out:
@@ -99,7 +107,9 @@ def process_inbound(ctx: ToolContext, saved: Saved, body: str, agent_fn: AgentFn
         # A person owns this conversation now. One holding text per hour, so the customer is not
         # left in silence, but the agent does not talk over the human.
         send(
-            customer_id=cid, channel=saved.channel, idempotency_key=f"handoff-hold:{cid}:{ctx.now():%Y%m%d%H}",
+            customer_id=cid,
+            channel=saved.channel,
+            idempotency_key=f"handoff-hold:{cid}:{ctx.now():%Y%m%d%H}",
             body="A team member has your request and will text you back shortly.",
         )
         outcome = {"route": "paused_handoff"}

@@ -74,7 +74,9 @@ class GoogleCalendar:
 
         return retry(guarded, **self._retry_kw) if safe_to_retry else guarded()
 
-    def busy_intervals(self, technician_id: int, start: datetime, end: datetime) -> list[tuple[datetime, datetime]]:
+    def busy_intervals(
+        self, technician_id: int, start: datetime, end: datetime
+    ) -> list[tuple[datetime, datetime]]:
         resp = self._req(
             "GET", self.url, True, ok=(200,),
             params={"timeMin": start.isoformat(), "timeMax": end.isoformat(), "singleEvents": "true", "maxResults": 250},
@@ -88,7 +90,9 @@ class GoogleCalendar:
             out.append((_parse(ev["start"]), _parse(ev["end"])))
         return out
 
-    def create_event(self, booking_id: int, technician_id: int, start: datetime, end: datetime, title: str) -> str:
+    def create_event(
+        self, booking_id: int, technician_id: int, start: datetime, end: datetime, title: str
+    ) -> str:
         # Deterministic id (a-v and 0-9 only): retrying the same booking+time cannot create a second event.
         event_id = f"p03b{booking_id}t{int(start.timestamp())}"
         if self.dry_run:
@@ -107,4 +111,6 @@ class GoogleCalendar:
     def delete_event(self, event_id: str) -> None:
         if self.dry_run or event_id.startswith("dryrun-"):
             return
-        self._req("DELETE", f"{self.url}/{event_id}", True, ok=(200, 204), tolerate=(404, 410))  # already gone = fine
+        self._req(
+            "DELETE", f"{self.url}/{event_id}", True, ok=(200, 204), tolerate=(404, 410)
+        )  # already gone = fine

@@ -57,8 +57,19 @@ def cleanup():
             "DELETE FROM outbound_messages WHERE customer_id=%s OR idempotency_key LIKE ANY(%s)",
             (cid, [f"emerg:{i}:%" for i in inb] + [f"handoff:{cid}:%"]),
         )
-        o.execute("DELETE FROM calendar_events WHERE booking_id IN (SELECT id FROM bookings WHERE customer_id=%s)", (cid,))
-        for t in ("crm_outbox", "bookings", "approvals", "followups", "inbound_messages", "emergencies", "audit_log"):
+        o.execute(
+            "DELETE FROM calendar_events WHERE booking_id IN (SELECT id FROM bookings WHERE customer_id=%s)",
+            (cid,),
+        )
+        for t in (
+            "crm_outbox",
+            "bookings",
+            "approvals",
+            "followups",
+            "inbound_messages",
+            "emergencies",
+            "audit_log",
+        ):
             o.execute(f"DELETE FROM {t} WHERE customer_id=%s", (cid,))
         o.execute("DELETE FROM idempotency_keys WHERE key LIKE %s", (f"book:{cid}:%",))
         o.execute("DELETE FROM customers WHERE id=%s", (cid,))
@@ -75,24 +86,47 @@ try:
     for i, text in enumerate(MESSAGES, 1):
         params = {"MessageSid": f"SM-live-{i}", "From": PHONE, "Body": text}
         sig = compute_signature(URL, params, s.twilio_auth_token.get_secret_value())
-        r = client.post("/webhooks/twilio", content=urlencode(params),
-                        headers={"X-Twilio-Signature": sig, "Content-Type": "application/x-www-form-urlencoded"})
+        r = client.post(
+            "/webhooks/twilio",
+            content=urlencode(params),
+            headers={"X-Twilio-Signature": sig, "Content-Type": "application/x-www-form-urlencoded"},
+        )
         with psycopg.connect(s.migrator_database_url) as c:
             reply = c.execute(
-                "SELECT body, status FROM outbound_messages WHERE idempotency_key=%s", (f"in:{c.execute('SELECT id FROM inbound_messages WHERE message_sid=%s', (f'SM-live-{i}',)).fetchone()[0]}:reply",)
+                "SELECT body, status FROM outbound_messages WHERE idempotency_key=%s",
+                (
+                    f"in:{c.execute('SELECT id FROM inbound_messages WHERE message_sid=%s', (f'SM-live-{i}',)).fetchone()[0]}:reply",
+                ),
             ).fetchone()
-        print(f"\n[{i}] Maria : {text}\n    webhook {r.status_code}\n    Agent : {reply[0] if reply else '(no reply)'}  [{reply[1] if reply else ''}]")
+        print(
+            f"\n[{i}] Maria : {text}\n    webhook {r.status_code}\n    Agent : {reply[0] if reply else '(no reply)'}  [{reply[1] if reply else ''}]"
+        )
 
     with psycopg.connect(s.migrator_database_url) as c:
         cid = c.execute("SELECT id FROM customers WHERE phone=%s", (PHONE,)).fetchone()[0]
         print("\n--- tools called (audit_log) ---")
-        for tool, dec, reason in c.execute("SELECT tool, decision, reason FROM audit_log WHERE customer_id=%s ORDER BY id", (cid,)):
+        for tool, dec, reason in c.execute(
+            "SELECT tool, decision, reason FROM audit_log WHERE customer_id=%s ORDER BY id", (cid,)
+        ):
             print(f"  {tool:24} {dec:15} {reason}")
-        print("bookings:", c.execute("SELECT status, discount_pct FROM bookings WHERE customer_id=%s", (cid,)).fetchall())
-        print("approvals:", c.execute("SELECT kind, status FROM approvals WHERE customer_id=%s", (cid,)).fetchall())
-        print("outbound statuses:", c.execute("SELECT status, count(*) FROM outbound_messages WHERE customer_id=%s GROUP BY 1", (cid,)).fetchall())
+        print(
+            "bookings:",
+            c.execute("SELECT status, discount_pct FROM bookings WHERE customer_id=%s", (cid,)).fetchall(),
+        )
+        print(
+            "approvals:",
+            c.execute("SELECT kind, status FROM approvals WHERE customer_id=%s", (cid,)).fetchall(),
+        )
+        print(
+            "outbound statuses:",
+            c.execute(
+                "SELECT status, count(*) FROM outbound_messages WHERE customer_id=%s GROUP BY 1", (cid,)
+            ).fetchall(),
+        )
     cost = sum(r.cost_usd or 0 for r in records)
-    print(f"\nLLM calls: {len(records)} | input tokens: {sum(r.input_tokens for r in records)} | output tokens: {sum(r.output_tokens for r in records)} | cost: ${cost:.4f} | models: {sorted({r.model for r in records})}")
+    print(
+        f"\nLLM calls: {len(records)} | input tokens: {sum(r.input_tokens for r in records)} | output tokens: {sum(r.output_tokens for r in records)} | cost: ${cost:.4f} | models: {sorted({r.model for r in records})}"
+    )
 finally:
     conn.close()
     cleanup()

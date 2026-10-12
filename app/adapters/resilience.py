@@ -22,7 +22,13 @@ class CircuitBreaker:
 
     def __init__(self, name: str, threshold: int = 3, window_s: float = 60, cooldown_s: float = 120,
                  clock: Callable[[], float] = time.monotonic) -> None:  # fmt: skip
-        self.name, self.threshold, self.window_s, self.cooldown_s, self.clock = name, threshold, window_s, cooldown_s, clock
+        self.name, self.threshold, self.window_s, self.cooldown_s, self.clock = (
+            name,
+            threshold,
+            window_s,
+            cooldown_s,
+            clock,
+        )
         self.failures: list[float] = []
         self.opened_at: float | None = None
 

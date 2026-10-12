@@ -28,6 +28,7 @@ SECRET = "tok-SECRET-123"
 
 # ------------------------------------------------------------------ in-memory servers
 
+
 class FakeGoogle:
     def __init__(self):
         self.events: dict[str, dict] = {}
@@ -61,7 +62,9 @@ class FakeHubSpot:
         self.objs = {"contacts": {}, "deals": {}}
         self.calls: list[tuple[str, str]] = []
         self.down = False
-        self.search_blind = False  # True = HubSpot's search index lags: records just written are not found yet
+        self.search_blind = (
+            False  # True = HubSpot's search index lags: records just written are not found yet
+        )
         self.n = 0
 
     def __call__(self, req: httpx.Request) -> httpx.Response:
@@ -74,7 +77,11 @@ class FakeHubSpot:
         body = json.loads(req.content) if req.content else {}
         if req.method == "POST" and parts[-1] == "search":
             f = body["filterGroups"][0]["filters"][0]
-            hits = [{"id": i, "properties": p} for i, p in self.objs[kind].items() if p.get(f["propertyName"]) == f["value"]]
+            hits = [
+                {"id": i, "properties": p}
+                for i, p in self.objs[kind].items()
+                if p.get(f["propertyName"]) == f["value"]
+            ]
             if self.search_blind:
                 hits = []
             return httpx.Response(200, json={"results": hits[:1]})
@@ -99,10 +106,16 @@ def google(dry_run=False, server=None, breaker=None):
 
 def hubspot(dry_run=False, server=None):
     server = server or FakeHubSpot()
-    return HubSpotCrm(SECRET, dry_run=dry_run, client=httpx.Client(transport=httpx.MockTransport(server)), sleep=lambda s: None), server
+    return HubSpotCrm(
+        SECRET,
+        dry_run=dry_run,
+        client=httpx.Client(transport=httpx.MockTransport(server)),
+        sleep=lambda s: None,
+    ), server
 
 
 # ------------------------------------------------------------------ calendar contract (fake AND real)
+
 
 class BookingBackedCalendar(FakeCalendar):
     """The fake stores events in a table whose booking_id is a foreign key, so a real booking row must exist."""
@@ -116,7 +129,13 @@ class BookingBackedCalendar(FakeCalendar):
         self.ctx.conn.execute(
             "INSERT INTO bookings (id, customer_id, technician_id, service_code, start_at, end_at, price_usd)"
             " VALUES (%s, %s, %s, 'ac_diagnostic', %s, %s, 89)",
-            (booking_id, c.customer_id, technician_id, datetime(2031, 1, booking_id, 15, tzinfo=UTC), datetime(2031, 1, booking_id, 16, tzinfo=UTC)),
+            (
+                booking_id,
+                c.customer_id,
+                technician_id,
+                datetime(2031, 1, booking_id, 15, tzinfo=UTC),
+                datetime(2031, 1, booking_id, 16, tzinfo=UTC),
+            ),
         )
         return super().create_event(booking_id, technician_id, start, end, title)
 
@@ -130,8 +149,14 @@ def calendar_case(request, ctx):
             "INSERT INTO calendar_events (technician_id, start_at, end_at, title) VALUES (%s,%s,%s,'busy')", (tech, START, END)
         ), lambda down: setattr(cal, "fail", down)  # fmt: skip
     cal, server = google()
+
     def external():
-        server.events["ext1"] = {"id": "ext1", "start": {"dateTime": START.isoformat()}, "end": {"dateTime": END.isoformat()}}
+        server.events["ext1"] = {
+            "id": "ext1",
+            "start": {"dateTime": START.isoformat()},
+            "end": {"dateTime": END.isoformat()},
+        }
+
     return cal, tech, external, lambda down: setattr(server, "down", down)
 
 
@@ -159,6 +184,7 @@ def test_calendar_contract_outage_raises_adapter_unavailable(calendar_case):
 
 
 # ------------------------------------------------------------------ Google specifics
+
 
 def test_google_dry_run_makes_no_write_calls_and_returns_a_placeholder():
     cal, server = google(dry_run=True)
@@ -215,6 +241,7 @@ def test_errors_never_contain_the_token_or_the_url():
 
 # ------------------------------------------------------------------ circuit breaker
 
+
 def test_breaker_opens_after_3_failures_fails_fast_then_recovers_after_cooldown():
     now = {"t": 0.0}
     br = CircuitBreaker("x", clock=lambda: now["t"])
@@ -249,11 +276,14 @@ def test_a_failed_trial_call_reopens_the_breaker():
 def test_retry_waits_with_growing_jittered_delays_and_gives_up():
     waits = []
     with pytest.raises(AdapterUnavailable):
-        retry(lambda: (_ for _ in ()).throw(AdapterUnavailable("x")), attempts=3, base_s=1, sleep=waits.append)
+        retry(
+            lambda: (_ for _ in ()).throw(AdapterUnavailable("x")), attempts=3, base_s=1, sleep=waits.append
+        )
     assert len(waits) == 2 and 0.5 <= waits[0] <= 1.5 and 1.0 <= waits[1] <= 3.0
 
 
 # ------------------------------------------------------------------ CRM contract (fake AND real)
+
 
 @pytest.fixture(params=["fake", "hubspot"])
 def crm_case(request):
@@ -264,8 +294,23 @@ def crm_case(request):
     return crm, lambda down: setattr(server, "down", down)
 
 
-CUSTOMER = {"id": 11, "name": "Maria Lopez", "email": None, "address": "1200 Oak St", "zip": "78704", "crm_contact_id": None, "phone": "+15125550111"}
-BOOKING = {"id": 21, "service": "ac_diagnostic", "start": START, "price": 89, "discount": 10, "status": "BOOKED"}
+CUSTOMER = {
+    "id": 11,
+    "name": "Maria Lopez",
+    "email": None,
+    "address": "1200 Oak St",
+    "zip": "78704",
+    "crm_contact_id": None,
+    "phone": "+15125550111",
+}
+BOOKING = {
+    "id": 21,
+    "service": "ac_diagnostic",
+    "start": START,
+    "price": 89,
+    "discount": 10,
+    "status": "BOOKED",
+}
 
 
 def test_crm_contract_upserting_twice_never_duplicates(crm_case):
@@ -317,13 +362,24 @@ def test_crm_sync_replaces_a_dry_run_placeholder_with_a_real_id(ctx):
     ctx.crm = crm
     crm_sync.enqueue(ctx, c.customer_id, "upsert_contact")
     assert crm_sync.process_outbox(ctx)["done"] >= 1
-    assert not ctx.conn.execute("SELECT crm_contact_id FROM customers WHERE id=%s", (c.customer_id,)).fetchone()[0].startswith("dryrun-")
+    assert (
+        not ctx.conn.execute("SELECT crm_contact_id FROM customers WHERE id=%s", (c.customer_id,))
+        .fetchone()[0]
+        .startswith("dryrun-")
+    )
 
 
 # ------------------------------------------------------------------ Twilio delivery from the outbox
 
+
 def twilio(handler):
-    return TwilioSender("ACtest", "authtoken", "+15125550000", "+14155238886", client=httpx.Client(transport=httpx.MockTransport(handler)))
+    return TwilioSender(
+        "ACtest",
+        "authtoken",
+        "+15125550000",
+        "+14155238886",
+        client=httpx.Client(transport=httpx.MockTransport(handler)),
+    )
 
 
 @pytest.fixture
@@ -346,13 +402,20 @@ def test_twilio_sends_only_to_allow_listed_numbers_and_marks_rows(live_ctx):
     seen = []
 
     def handler(req):
-        seen.append((dict(httpx.QueryParams(req.content.decode())), req.headers["authorization"].startswith("Basic ")))
+        seen.append(
+            (dict(httpx.QueryParams(req.content.decode())), req.headers["authorization"].startswith("Basic "))
+        )
         return httpx.Response(201, json={"sid": "SM1"})
 
     counts = deliver_outbox(ctx, twilio(handler), {"+15125550941"})
     assert counts["sent"] == 1 and counts["blocked"] >= 1
     assert seen[0][0]["To"] == "+15125550941" and seen[0][0]["Body"] == "hello" and seen[0][1]
-    status = lambda k: ctx.conn.execute("SELECT status FROM outbound_messages WHERE idempotency_key=%s", (k,)).fetchone()[0]  # noqa: E731
+
+    def status(k):
+        return ctx.conn.execute(
+            "SELECT status FROM outbound_messages WHERE idempotency_key=%s", (k,)
+        ).fetchone()[0]
+
     assert status("tw-1") == "SENT" and status("tw-2") == "FAILED"
 
 
@@ -361,7 +424,16 @@ def test_twilio_whatsapp_uses_the_prefix_on_both_numbers(live_ctx):
     me = make_customer(ctx, 943)
     queue(ctx, me.customer_id, "tw-wa", channel="whatsapp")
     seen = []
-    deliver_outbox(ctx, twilio(lambda r: (seen.append(dict(httpx.QueryParams(r.content.decode()))), httpx.Response(201, json={"sid": "SM2"}))[1]), {"+15125550943"})
+    deliver_outbox(
+        ctx,
+        twilio(
+            lambda r: (
+                seen.append(dict(httpx.QueryParams(r.content.decode()))),
+                httpx.Response(201, json={"sid": "SM2"}),
+            )[1]
+        ),
+        {"+15125550943"},
+    )
     assert seen[0]["To"] == "whatsapp:+15125550943" and seen[0]["From"] == "whatsapp:+14155238886"
 
 
@@ -370,7 +442,10 @@ def test_twilio_outage_leaves_the_row_queued_and_a_bad_request_marks_it_failed(l
     me = make_customer(ctx, 944)
     queue(ctx, me.customer_id, "tw-down")
     assert deliver_outbox(ctx, twilio(lambda r: httpx.Response(503)), {"+15125550944"})["deferred"] == 1
-    assert ctx.conn.execute("SELECT status FROM outbound_messages WHERE idempotency_key='tw-down'").fetchone()[0] == "QUEUED"
+    assert (
+        ctx.conn.execute("SELECT status FROM outbound_messages WHERE idempotency_key='tw-down'").fetchone()[0]
+        == "QUEUED"
+    )
     assert deliver_outbox(ctx, twilio(lambda r: httpx.Response(400)), {"+15125550944"})["failed"] == 1
 
 
@@ -380,8 +455,15 @@ def test_dry_run_rows_and_telegram_rows_are_never_sent_by_twilio(live_ctx):
     ctx.messaging.dry_run = True
     ctx.messaging.send(customer_id=me.customer_id, channel="sms", body="dry", idempotency_key="tw-dry")
     ctx.messaging.dry_run = False
-    ctx.messaging.send(customer_id=None, channel="telegram", body="alert", idempotency_key="tw-tg", recipient="owner")
-    assert deliver_outbox(ctx, twilio(lambda r: pytest.fail("must not call Twilio")), {"+15125550945"}) == {"sent": 0, "failed": 0, "blocked": 0, "deferred": 0}
+    ctx.messaging.send(
+        customer_id=None, channel="telegram", body="alert", idempotency_key="tw-tg", recipient="owner"
+    )
+    assert deliver_outbox(ctx, twilio(lambda r: pytest.fail("must not call Twilio")), {"+15125550945"}) == {
+        "sent": 0,
+        "failed": 0,
+        "blocked": 0,
+        "deferred": 0,
+    }
 
 
 def test_hubspot_uses_the_stored_ids_so_a_lagging_search_index_cannot_create_duplicates():
@@ -394,7 +476,10 @@ def test_hubspot_uses_the_stored_ids_so_a_lagging_search_index_cannot_create_dup
     deal_again = crm.upsert_deal(contact, {**BOOKING, "crm_deal_id": deal, "status": "CANCELLED"})
     assert contact == again and deal == deal_again
     assert len(server.objs["contacts"]) == 1 and len(server.objs["deals"]) == 1
-    assert server.objs["contacts"][contact]["lastname"] == "Q Lopez" and server.objs["deals"][deal]["dealstage"] == "closedlost"
+    assert (
+        server.objs["contacts"][contact]["lastname"] == "Q Lopez"
+        and server.objs["deals"][deal]["dealstage"] == "closedlost"
+    )
 
 
 def test_hubspot_falls_back_to_search_then_create_when_the_stored_id_no_longer_exists():
@@ -413,8 +498,19 @@ def test_twilio_whatsapp_template_mode_sends_the_content_sid_and_no_free_text():
         seen.append(dict(httpx.QueryParams(req.content.decode())))
         return httpx.Response(201, json={"sid": "SM3"})
 
-    sender = TwilioSender("ACtest", "authtoken", "", "+14155550100", client=httpx.Client(transport=httpx.MockTransport(handler)), whatsapp_content_sid="HX123")
+    sender = TwilioSender(
+        "ACtest",
+        "authtoken",
+        "",
+        "+14155550100",
+        client=httpx.Client(transport=httpx.MockTransport(handler)),
+        whatsapp_content_sid="HX123",
+    )
     sender.send("whatsapp", "+919999999999", "this text must not be sent")
-    assert seen[0]["ContentSid"] == "HX123" and "Body" not in seen[0] and seen[0]["From"] == "whatsapp:+14155550100"
+    assert (
+        seen[0]["ContentSid"] == "HX123"
+        and "Body" not in seen[0]
+        and seen[0]["From"] == "whatsapp:+14155550100"
+    )
     sender.send("sms", "+15125550000", "sms keeps the body")  # the template only applies to WhatsApp
     assert seen[1]["Body"] == "sms keeps the body" and "ContentSid" not in seen[1]

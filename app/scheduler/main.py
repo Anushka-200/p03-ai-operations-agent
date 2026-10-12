@@ -31,7 +31,13 @@ def run_delivery() -> None:
     if not s.twilio_live or s.dry_run:
         return
     allowed = {n.strip() for n in s.twilio_allowed_to.split(",") if n.strip()}
-    sender = TwilioSender(s.twilio_account_sid, s.twilio_auth_token.get_secret_value(), s.twilio_sms_from, s.twilio_whatsapp_from, whatsapp_content_sid=s.twilio_whatsapp_content_sid)
+    sender = TwilioSender(
+        s.twilio_account_sid,
+        s.twilio_auth_token.get_secret_value(),
+        s.twilio_sms_from,
+        s.twilio_whatsapp_from,
+        whatsapp_content_sid=s.twilio_whatsapp_content_sid,
+    )
     try:
         with psycopg.connect(s.database_url) as conn:
             deliver_outbox(make_context(conn, s), sender, allowed)

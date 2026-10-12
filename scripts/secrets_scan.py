@@ -14,7 +14,9 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-SENSITIVE_KEY = re.compile(r"(SCAN_EXTRA_TERMS|TOKEN|SECRET|PASSWORD|KEY|SID|_ID|ALLOWED_TO|_FROM|EMAIL|CREDENTIALS)", re.I)
+SENSITIVE_KEY = re.compile(
+    r"(SCAN_EXTRA_TERMS|TOKEN|SECRET|PASSWORD|KEY|SID|_ID|ALLOWED_TO|_FROM|EMAIL|CREDENTIALS)", re.I
+)
 SAFE_KEYS = {"POSTGRES_PORT", "LOG_LEVEL", "DRY_RUN", "LANGFUSE_HOST", "GOOGLE_CREDENTIALS_FILE"}
 SHAPES = {
     "anthropic key": r"sk-ant-[A-Za-z0-9_\-]{20,}",
@@ -38,7 +40,12 @@ def env_values() -> dict[str, str]:
             if "=" in line and not line.lstrip().startswith("#"):
                 k, v = line.split("=", 1)
                 k, v = k.strip(), v.strip().strip("'\"")
-                if SENSITIVE_KEY.search(k) and k not in SAFE_KEYS and len(v) >= 6 and v.lower() not in {"true", "false", "changeme"}:
+                if (
+                    SENSITIVE_KEY.search(k)
+                    and k not in SAFE_KEYS
+                    and len(v) >= 6
+                    and v.lower() not in {"true", "false", "changeme"}
+                ):
                     out[k] = v
     # Personal terms (your email, your own phone number...) live in .env, never in the repo:
     # SCAN_EXTRA_TERMS=term1,term2
@@ -61,7 +68,9 @@ def main() -> int:
                 print(f"HISTORY       {name}: commit {c}")
                 problems += 1
     for label, pat in SHAPES.items():
-        for h in git("grep", "-n", "-E", "--untracked", "-I", "-e", pat, "--", ":!.env", ":!uv.lock").splitlines():
+        for h in git(
+            "grep", "-n", "-E", "--untracked", "-I", "-e", pat, "--", ":!.env", ":!uv.lock"
+        ).splitlines():
             print(f"SHAPE         {label}: {h.split(':', 2)[0]}:{h.split(':', 2)[1]}")
             problems += 1
         if history:
