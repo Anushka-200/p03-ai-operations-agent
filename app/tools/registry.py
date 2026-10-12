@@ -49,10 +49,16 @@ def _validation_message(spec: ToolSpec, exc: ValidationError) -> str:
     return f"Invalid arguments for {spec.name}: " + "; ".join(parts) + f". Accepted arguments: {allowed}."
 
 
+BOOKING_CHANGES = frozenset(
+    {"cancel_appointment", "reschedule_appointment"}
+)  # one pending change per booking
+
+
 def _create_approval(ctx: ToolContext, caller: Caller, spec: ToolSpec, args: BaseModel) -> int:
+    arg_values = args.model_dump(mode="json")
     payload = {
         "tool": spec.name,
-        "args": args.model_dump(mode="json"),
+        "args": arg_values,
         "caller": {"role": caller.role, "customer_id": caller.customer_id},
     }
     # The model may ask twice for the same thing: reuse the pending request instead of piling up.
@@ -63,6 +69,16 @@ def _create_approval(ctx: ToolContext, caller: Caller, spec: ToolSpec, args: Bas
     ).fetchone()
     if row:
         return row[0]
+    booking_id = arg_values.get("booking_id")
+    if spec.name in BOOKING_CHANGES and booking_id is not None:
+        # A newer request about the same booking replaces the older one ("cancel it" then "move it instead"):
+        # otherwise the owner would see two conflicting cards and could approve both.
+        ctx.conn.execute(
+            "UPDATE approvals SET status = 'EXPIRED', decided_by = 'system:superseded', decided_at = %s"
+            " WHERE kind = ANY(%s) AND customer_id IS NOT DISTINCT FROM %s AND status = 'PENDING'"
+            " AND (payload->'args'->>'booking_id') = %s",
+            (ctx.now(), list(BOOKING_CHANGES), caller.customer_id, str(booking_id)),
+        )
     created = ctx.conn.execute(
         "INSERT INTO approvals (kind, customer_id, payload, requested_by) VALUES (%s, %s, %s, %s)"
         " RETURNING id",

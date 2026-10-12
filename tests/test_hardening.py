@@ -301,3 +301,61 @@ def crm_sync_run(ctx):
     from app import crm_sync
 
     return crm_sync.process_outbox(ctx)
+
+
+# ---------- one pending change per booking ----------
+
+
+def _pending(ctx, cid):
+    return ctx.conn.execute(
+        "SELECT kind, status FROM approvals WHERE customer_id=%s ORDER BY id", (cid,)
+    ).fetchall()
+
+
+def test_a_newer_change_request_for_the_same_booking_supersedes_the_older_pending_one(ctx):
+    maria = make_customer(ctx, 1)
+    booked = book(
+        ctx, maria, offers(ctx, maria, TUESDAY)[0]["slot_id"]
+    )  # < 24 h ahead: changes need approval
+    bid = booked["booking_id"]
+    first = run_tool(ctx, maria, "cancel_appointment", {"booking_id": bid, "reason": "plans changed"})
+    assert first["error"] == "needs_approval"
+    new_slot = offers(ctx, maria, TUESDAY + timedelta(days=2))[0]["slot_id"]
+    second = run_tool(
+        ctx,
+        maria,
+        "reschedule_appointment",
+        {"booking_id": bid, "new_slot_id": new_slot, "idempotency_key": "resched-sup-1"},
+    )
+    assert second["error"] == "needs_approval" and second["approval_id"] != first["approval_id"]
+    assert _pending(ctx, maria.customer_id) == [
+        ("cancel_appointment", "EXPIRED"),
+        ("reschedule_appointment", "PENDING"),
+    ]
+    stale = decide_approval(ctx, first["approval_id"], True, "owner:test")  # a tap on the old card
+    assert stale["ok"] is False and stale["error"] == "already_decided"
+    assert ctx.conn.execute("SELECT status FROM bookings WHERE id=%s", (bid,)).fetchone()[0] == "BOOKED"
+
+
+def test_the_same_request_twice_still_reuses_one_approval_and_other_customers_are_untouched(ctx):
+    maria, dev = make_customer(ctx, 1), make_customer(ctx, 2)
+    a = book(ctx, maria, offers(ctx, maria, TUESDAY)[0]["slot_id"])
+    b = book(
+        ctx, dev, offers(ctx, dev, TUESDAY)[0]["slot_id"], key="key-dev-12345"
+    )  # same hour, other technician
+    args = {"booking_id": a["booking_id"], "reason": "plans changed"}
+    first, again = (
+        run_tool(ctx, maria, "cancel_appointment", args),
+        run_tool(ctx, maria, "cancel_appointment", args),
+    )
+    assert first["approval_id"] == again["approval_id"]
+    assert (
+        run_tool(ctx, dev, "cancel_appointment", {"booking_id": b["booking_id"], "reason": "moving away"})[
+            "error"
+        ]
+        == "needs_approval"
+    )
+    assert [s for _, s in _pending(ctx, maria.customer_id)] == ["PENDING"]
+    assert [s for _, s in _pending(ctx, dev.customer_id)] == [
+        "PENDING"
+    ]  # one customer's request never touches another's
