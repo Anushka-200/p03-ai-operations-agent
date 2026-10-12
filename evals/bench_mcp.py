@@ -45,7 +45,7 @@ async def via_mcp() -> tuple[dict[str, list[float]], dict[str, str], float]:
                 t = time.perf_counter()
                 res = await client.call_tool(name, args)
                 times[name].append(time.perf_counter() - t)
-            out[name] = json.dumps(res.structured_content or res.content[0].text, sort_keys=True, default=str)
+            out[name] = json.dumps(res.structured_content or getattr(res.content[0], "text", ""), sort_keys=True, default=str)
     return times, out, startup
 
 
@@ -72,7 +72,8 @@ def normalise(text: str) -> object:
 def main() -> int:
     s = get_settings()
     with psycopg.connect(s.migrator_database_url, autocommit=True) as owner:
-        last = owner.execute("SELECT coalesce(max(id), 0) FROM audit_log").fetchone()[0]
+        row = owner.execute("SELECT coalesce(max(id), 0) FROM audit_log").fetchone()
+        last = row[0] if row else 0
         try:
             local_t, local_out = in_process()
             mcp_t, mcp_out, startup = asyncio.run(via_mcp())
