@@ -4,11 +4,15 @@ Business hours are constants here for now (a real client's hours would come from
 Everything is stored in UTC; customers see local time (America/Chicago).
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
+from typing import TYPE_CHECKING
 from zoneinfo import ZoneInfo
 
-from app.tools.types import ToolContext
+if TYPE_CHECKING:  # only for type hints: a real import here made `import app.availability` circular
+    from app.tools.types import ToolContext
 
 BUSINESS_TZ = ZoneInfo("America/Chicago")
 OPEN_HOUR, CLOSE_HOUR = 8, 18  # visits must start at/after 8:00 and end by 18:00 local time

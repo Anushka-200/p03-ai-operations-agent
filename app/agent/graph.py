@@ -20,7 +20,7 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.types import interrupt
 
 from app import gate
-from app.agent import guard, prompts
+from app.agent import guard, prompts, specialists
 from app.llm import LLMError
 from app.tools import REGISTRY, Caller, ToolContext, run_tool
 
@@ -47,6 +47,7 @@ def add_messages(left: list[dict[str, Any]], right: list[dict[str, Any]]) -> lis
 class State(TypedDict, total=False):
     messages: Annotated[list[dict[str, Any]], add_messages]  # the conversation (OpenAI-shaped dicts)
     summary: str  # compacted memory of the turns that were dropped from `messages`
+    specialist: str  # supervisor mode: which specialist handles this message ('single' = one agent, all tools)
     # per message (reset by the input of each turn)
     turn_tool_calls: int
     reply: str | None
@@ -67,10 +68,13 @@ def _cfg(config) -> dict[str, Any]:
     return config["configurable"]
 
 
-def customer_tools(caller: Caller) -> list[dict[str, Any]]:
-    """Tool schemas the model may see: only what this role can use at all (least agency)."""
+def customer_tools(caller: Caller, only: frozenset[str] | None = None) -> list[dict[str, Any]]:
+    """Tool schemas the model may see: only what this role can use at all (least agency), and in
+    supervisor mode only the current specialist's tools."""
     out = []
     for name, spec in sorted(REGISTRY.items()):
+        if only is not None and name not in only:
+            continue
         if gate.role_decision(name, caller.role) is None:
             schema = spec.args_model.model_json_schema()
             schema.pop("title", None)
@@ -154,17 +158,36 @@ def compact_node(state: State, config) -> dict[str, Any]:
     return {"summary": res.text.strip(), "messages": [{"role": REPLACE}, *tail], **_spent(state, res)}
 
 
+def route_node(state: State, config) -> dict[str, Any]:
+    """Single mode: nothing to decide. Supervisor mode: pick the specialist for this message."""
+    c = _cfg(config)
+    ctx = c["ctx"]
+    if ctx.settings.agent_mode != "supervisor":
+        return {"specialist": "single"}
+    name, res = specialists.route(c["llm"], state["messages"], ctx.settings)
+    return {"specialist": name, **(_spent(state, res) if res is not None else {})}
+
+
+def _system(state: State, ctx: ToolContext, caller: Caller) -> str:
+    base = prompts.system_prompt(ctx.now(), _profile(ctx, caller), state.get("summary", ""))
+    return base + specialists.FOCUS.get(state.get("specialist", "single"), "")
+
+
+def _tools_for(state: State, caller: Caller) -> list[dict[str, Any]]:
+    return customer_tools(caller, specialists.TOOLS.get(state.get("specialist", "single")))
+
+
 def agent_node(state: State, config) -> dict[str, Any]:
     c = _cfg(config)
     ctx, caller, llm = c["ctx"], c["caller"], c["llm"]
     if (why := _over_caps(state, ctx)) is not None:
         return {"handoff_reason": why}
-    system = prompts.system_prompt(ctx.now(), _profile(ctx, caller), state.get("summary", ""))
+    system = _system(state, ctx, caller)
     try:
         res = llm(
             [{"role": "system", "content": system}, *state["messages"]],
             name="agent", max_tokens=ctx.settings.agent_max_output_tokens,
-            tools=customer_tools(caller), settings=ctx.settings,
+            tools=_tools_for(state, caller), settings=ctx.settings,
         )  # fmt: skip
     except LLMError:
         logger.exception("agent llm failed")
@@ -236,10 +259,10 @@ def guard_node(state: State, config) -> dict[str, Any]:
     out: dict[str, Any] = {}
     problem = guard.check_reply(text, allowed, booked) if text else "the reply was empty"
     if problem:
-        logger.warning("output guard blocked a reply", extra={"problem": problem, "draft_preview": text[:160]})
+        logger.warning("output guard blocked a reply: %s | draft: %s", problem, text[:160], extra={"problem": problem, "draft_preview": text[:160]})
         try:  # one repair attempt, then a safe fallback: never loop on a misbehaving model
             res = llm(
-                [{"role": "system", "content": prompts.system_prompt(ctx.now(), _profile(ctx, c["caller"]), state.get("summary", ""))},
+                [{"role": "system", "content": _system(state, ctx, c["caller"])},
                  *state["messages"],
                  {"role": "user", "content": f"[system] Your draft was blocked because {problem} Rewrite the reply to the customer now."}],
                 name="agent-repair", max_tokens=ctx.settings.agent_max_output_tokens, settings=ctx.settings,
@@ -302,13 +325,15 @@ def handoff_node(state: State, config) -> dict[str, Any]:
 def build_graph(checkpointer):
     g = StateGraph(State)
     g.add_node("compact", compact_node)
+    g.add_node("route", route_node)
     g.add_node("agent", agent_node)
     g.add_node("tools", tools_node)
     g.add_node("guard", guard_node)
     g.add_node("approval_wait", approval_wait_node)
     g.add_node("handoff", handoff_node)
     g.add_edge(START, "compact")
-    g.add_edge("compact", "agent")
+    g.add_edge("compact", "route")
+    g.add_edge("route", "agent")
     g.add_conditional_edges("agent", after_agent, {"tools": "tools", "guard": "guard", "handoff": "handoff"})
     g.add_conditional_edges("tools", lambda s: "agent", {"agent": "agent"})
     g.add_conditional_edges("guard", after_guard, {"approval_wait": "approval_wait", "handoff": "handoff", "end": END})

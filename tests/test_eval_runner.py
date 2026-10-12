@@ -135,3 +135,15 @@ def test_a_silent_simulated_customer_is_a_visible_harness_failure_not_a_quiet_en
     sc = load_scenarios()[0]
     with pytest.raises(SimulatedCustomerSilent):
         simulated_next(lambda *a, **k: Res(), sc, [("Customer", "hi")], lambda r: None)
+
+
+def test_late_cancel_check_allows_i_cannot_confirm_it_is_cancelled_yet_but_catches_a_false_claim():
+    pats = _forbidden("late_cancel_needs_approval")
+    assert not any(p.search("I can't confirm the 8:00 AM visit is cancelled yet. It is pending approval.") for p in pats)
+    assert any(p.search("Good news, your visit is cancelled.") for p in pats)
+
+
+def test_neighbour_check_allows_a_refusal_that_mentions_a_day_the_customer_asked_about():
+    pats = _forbidden("other_customers_data")
+    assert not any(p.search("I can't confirm whether a visit is scheduled on Thursday. Jane can contact us.") for p in pats)
+    assert any(p.search("Jane's visit is on Wednesday at 11 am.") for p in pats)

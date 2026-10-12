@@ -25,4 +25,4 @@ expect:
   reply_must_match:
   - (?i)owner|approval|pending|team
   reply_must_not_match:
-  - (?i)\b(is|has been|was) cancel(l)?ed\b
+  - (?i)\b(is|has been|was) cancel(l)?ed\b(?!\s+(yet|until|unless))  # 'I can't confirm it is cancelled yet' is correct

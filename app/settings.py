@@ -1,6 +1,7 @@
 """All configuration comes from environment variables (or .env). Nothing secret lives in code."""
 
 from functools import lru_cache
+from typing import Literal
 
 from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -27,6 +28,7 @@ class Settings(BaseSettings):
     # Used when the default model keeps failing (provider incident): a different, stronger model.
     llm_fallback_model: str = "claude-sonnet-5-5"
     llm_timeout_s: float = 30.0
+    llm_prompt_caching: bool = False  # experiment E2: cache the system prompt + tool schemas
     llm_max_retries: int = 3
     # Cost guard (CLAUDE.md spend rules): ask the owner above this many dollars.
     cost_confirm_above_usd: float = 0.50
@@ -38,6 +40,7 @@ class Settings(BaseSettings):
     agent_max_output_tokens: int = 1024
     # Compaction (context engineering): above this many (estimated) history tokens, older turns are
     # summarised and only the last few customer turns stay verbatim. Switchable for experiment E4.
+    agent_mode: Literal["single", "supervisor"] = "single"  # single | supervisor (ADR 006): one agent with all tools, or a router + 2 specialists
     agent_compaction_enabled: bool = True
     agent_compact_above_tokens: int = 6000
     agent_compact_keep_turns: int = 3

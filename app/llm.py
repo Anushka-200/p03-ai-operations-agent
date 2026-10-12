@@ -159,6 +159,10 @@ def _call_with_retries(
             extra: dict[str, Any] = {} if temperature is None else {"temperature": temperature}
             if tools:
                 extra["tools"] = tools
+            if s.llm_prompt_caching:
+                # One cache breakpoint after the system message; Anthropic's prefix order (tools, system)
+                # means the tool schemas are cached with it. Only pays off above the model's minimum size (E2).
+                extra["cache_control_injection_points"] = [{"location": "message", "role": "system"}]
             response = completion_fn(
                 model=model,
                 messages=messages,
