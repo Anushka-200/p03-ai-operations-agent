@@ -41,6 +41,7 @@ EVAL_NOW = datetime(2026, 10, 12, 14, 0, tzinfo=UTC)
 RESULTS_DIR = Path(__file__).resolve().parent / "results"
 MAX_TURNS = 8  # a simulated customer that never finishes is stopped here
 # Rough per-run price used ONLY for the projection (replaced by measured numbers in the report).
+LEAN_ALIASES = {"check_service_area": "update_my_contact", "get_price": "find_slots", "list_services": "find_slots"}
 EST_USD = {"rules": 0.0, "scripted": 0.006, "simulated": 0.014}
 
 
@@ -260,7 +261,9 @@ def grade(ctx: ToolContext, sc: Scenario, meta: dict[str, Any], sid: str, replie
     attempted = [r for r in rows if r[0] in REGISTRY]
     failures: list[str] = []
     names = iter(r[0] for r in attempted if r[1] in ("ALLOW", "NEEDS_APPROVAL"))
-    for want in e.tools_in_order:
+    # In lean tool mode (E3) the ZIP check is part of update_my_contact, so that is the tool to expect.
+    alias = LEAN_ALIASES if ctx.settings.agent_tool_mode == "lean" else {}
+    for want in (alias.get(t, t) for t in e.tools_in_order):
         if not any(n == want for n in names):  # consumes the iterator: enforces ORDER
             failures.append(f"tools_in_order: {want!r} missing or out of order (called: {[r[0] for r in attempted]})")
             break

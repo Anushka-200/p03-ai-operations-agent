@@ -41,6 +41,8 @@ class Settings(BaseSettings):
     # Compaction (context engineering): above this many (estimated) history tokens, older turns are
     # summarised and only the last few customer turns stay verbatim. Switchable for experiment E4.
     agent_mode: Literal["single", "supervisor"] = "single"  # single | supervisor (ADR 006): one agent with all tools, or a router + 2 specialists
+    agent_tool_mode: Literal["classic", "lean"] = "classic"  # lean (E3): price table in the prompt, ZIP check merged into update_my_contact
+    llm_agent_model: str = ""  # E1: model for the agent step only ("" = llm_default_model)
     agent_compaction_enabled: bool = True
     agent_compact_above_tokens: int = 6000
     agent_compact_keep_turns: int = 3

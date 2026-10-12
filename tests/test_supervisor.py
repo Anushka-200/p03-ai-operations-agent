@@ -71,3 +71,56 @@ def test_single_mode_makes_no_router_call_and_keeps_every_tool(ctx, agent_env): 
     llm = FakeLLM(say("Hello!"))
     turn(make(llm), ctx, c, "hi")
     assert len(llm.calls) == 1 and _tool_names(llm.calls[0]) == CUSTOMER_TOOLS
+
+
+# ---------- E3 lean tool mode and E1 agent model (settings only; defaults keep today's behaviour) ----------
+
+def test_update_my_contact_with_a_zip_also_answers_whether_we_serve_it(ctx):
+    from app.tools import run_tool
+
+    c = make_customer(ctx, 824, ready=False)
+    inside = run_tool(ctx, c, "update_my_contact", {"zip": "78704"})
+    assert inside["ok"] and inside["service_area"]["in_area"] is True
+    outside = run_tool(ctx, c, "update_my_contact", {"zip": "10001"})
+    assert outside["service_area"]["in_area"] is False
+    assert "service_area" not in run_tool(ctx, c, "update_my_contact", {"name": "Maria"})
+
+
+def test_lean_mode_hides_the_three_lookup_tools_and_puts_the_price_table_in_the_prompt(ctx, agent_env):  # noqa: F811
+    make, _, _ = agent_env
+    ctx.settings = ctx.settings.model_copy(update={"agent_tool_mode": "lean"})
+    c = make_customer(ctx, 825)
+    llm = FakeLLM(say("Hello!"))
+    turn(make(llm), ctx, c, "hi")
+    names = _tool_names(llm.calls[0])
+    assert not names & {"list_services", "get_price", "check_service_area"} and "find_slots" in names
+    system = llm.calls[0][0][0]["content"]
+    assert "Our services (code | name | price" in system and "$89" in system and "check_service_area" not in system
+
+
+def test_default_mode_keeps_all_lookup_tools_and_no_catalog(ctx, agent_env):  # noqa: F811
+    make, _, _ = agent_env
+    c = make_customer(ctx, 826)
+    llm = FakeLLM(say("Hello!"))
+    turn(make(llm), ctx, c, "hi")
+    assert {"list_services", "get_price", "check_service_area"} <= _tool_names(llm.calls[0])
+    assert "Our services (code" not in llm.calls[0][0][0]["content"]
+
+
+def test_a_price_from_the_prompt_catalog_passes_the_output_guard_in_lean_mode(ctx, agent_env):  # noqa: F811
+    make, _, _ = agent_env
+    ctx.settings = ctx.settings.model_copy(update={"agent_tool_mode": "lean"})
+    c = make_customer(ctx, 827)
+    llm = FakeLLM(say("The AC diagnostic visit is $89."))
+    assert "$89" in turn(make(llm), ctx, c, "how much is a diagnostic?")
+    assert len(llm.calls) == 1  # no repair call: the price table is allowed even without a tool result
+
+
+def test_agent_model_override_applies_to_the_agent_step_only(ctx, agent_env):  # noqa: F811
+    make, _, _ = agent_env
+    ctx.settings = ctx.settings.model_copy(update={"llm_agent_model": "claude-sonnet-5-5", "agent_mode": "supervisor"})
+    c = make_customer(ctx, 828)
+    llm = FakeLLM(say("INTAKE"), say("Hello!"))
+    turn(make(llm), ctx, c, "hi")
+    assert llm.calls[0][1].get("model") is None  # the router stays on the default cheap model
+    assert llm.calls[1][1]["model"] == "claude-sonnet-5-5"

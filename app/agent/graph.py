@@ -168,13 +168,30 @@ def route_node(state: State, config) -> dict[str, Any]:
     return {"specialist": name, **(_spent(state, res) if res is not None else {})}
 
 
+LEAN_HIDDEN = frozenset({"list_services", "get_price", "check_service_area"})  # replaced by the prompt catalog
+
+
+def _catalog(ctx: ToolContext) -> str:
+    rows = ctx.conn.execute(
+        "SELECT code, name, price_usd, duration_min, includes FROM services WHERE active ORDER BY price_usd, code"
+    ).fetchall()
+    return "\n".join(f"{c} | {n} | ${float(p):g} | {d} | {inc}" for c, n, p, d, inc in rows)
+
+
 def _system(state: State, ctx: ToolContext, caller: Caller) -> str:
-    base = prompts.system_prompt(ctx.now(), _profile(ctx, caller), state.get("summary", ""))
+    lean = ctx.settings.agent_tool_mode == "lean"
+    base = prompts.system_prompt(
+        ctx.now(), _profile(ctx, caller), state.get("summary", ""), _catalog(ctx) if lean else ""
+    )
     return base + specialists.FOCUS.get(state.get("specialist", "single"), "")
 
 
-def _tools_for(state: State, caller: Caller) -> list[dict[str, Any]]:
-    return customer_tools(caller, specialists.TOOLS.get(state.get("specialist", "single")))
+def _tools_for(state: State, caller: Caller, ctx: ToolContext) -> list[dict[str, Any]]:
+    allowed = specialists.TOOLS.get(state.get("specialist", "single"))
+    if ctx.settings.agent_tool_mode == "lean":
+        names = (allowed if allowed is not None else frozenset(REGISTRY)) - LEAN_HIDDEN
+        return customer_tools(caller, names)
+    return customer_tools(caller, allowed)
 
 
 def agent_node(state: State, config) -> dict[str, Any]:
@@ -187,7 +204,8 @@ def agent_node(state: State, config) -> dict[str, Any]:
         res = llm(
             [{"role": "system", "content": system}, *state["messages"]],
             name="agent", max_tokens=ctx.settings.agent_max_output_tokens,
-            tools=_tools_for(state, caller), settings=ctx.settings,
+            tools=_tools_for(state, caller, ctx), settings=ctx.settings,
+            model=ctx.settings.llm_agent_model or None,
         )  # fmt: skip
     except LLMError:
         logger.exception("agent llm failed")

@@ -171,7 +171,10 @@ def update_my_contact(ctx: ToolContext, caller: Caller, a: ContactArgs) -> dict[
         (caller.customer_id,),
     )
     crm_sync.enqueue(ctx, caller.customer_id, "upsert_contact")  # type: ignore[arg-type]
-    return {"ok": True, "saved": sorted(changes)}
+    result: dict[str, Any] = {"ok": True, "saved": sorted(changes)}
+    if "zip" in changes:  # saves the model a check_service_area call
+        result["service_area"] = check_service_area(ctx, caller, ZipArgs(zip=changes["zip"]))
+    return result
 
 
 class SlotArgs(ToolArgs):
@@ -231,4 +234,8 @@ def handoff_to_human(ctx: ToolContext, caller: Caller, a: HandoffArgs) -> dict[s
         body=f"Customer #{caller.customer_id} needs a person: {clean_text(a.reason)}",
         idempotency_key=f"handoff:{caller.customer_id}:{ctx.now():%Y%m%d%H}",
     )
-    return {"ok": True, "message": "The team has been notified. Tell the customer someone will follow up."}
+    return {
+        "ok": True,
+        "message": "The team has been notified. If the customer is upset, begin your reply with a short, sincere "
+        "apology (\"I'm sorry about that\"). Then tell the customer someone will follow up.",
+    }
