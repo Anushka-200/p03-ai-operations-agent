@@ -58,7 +58,7 @@ def twilio(write: bool) -> None:
     if not write or not allowed:
         print("needs --write and TWILIO_ALLOWED_TO")
         return
-    sender = TwilioSender(s.twilio_account_sid, s.twilio_auth_token.get_secret_value(), s.twilio_sms_from, s.twilio_whatsapp_from)
+    sender = TwilioSender(s.twilio_account_sid, s.twilio_auth_token.get_secret_value(), s.twilio_sms_from, s.twilio_whatsapp_from, whatsapp_content_sid=s.twilio_whatsapp_content_sid)
     sid = sender.send("whatsapp" if s.twilio_whatsapp_from and not s.twilio_sms_from else "sms", allowed[0], "CoolBreeze test: this is the P03 live check.")
     print("Twilio accepted the message, sid starts with:", sid[:2])
     _ = (psycopg, deliver_outbox)  # the outbox path is covered by tests; this checks credentials and numbers

@@ -403,3 +403,18 @@ def test_hubspot_falls_back_to_search_then_create_when_the_stored_id_no_longer_e
     assert contact != "424242" and len(server.objs["contacts"]) == 1
     deal = crm.upsert_deal(contact, {**BOOKING, "crm_deal_id": "999"})
     assert deal in server.objs["deals"] and len(server.objs["deals"]) == 1
+
+
+def test_twilio_whatsapp_template_mode_sends_the_content_sid_and_no_free_text():
+    """Trial sandboxes refuse free text over the API (21654); with a template configured we send only the template."""
+    seen = []
+
+    def handler(req):
+        seen.append(dict(httpx.QueryParams(req.content.decode())))
+        return httpx.Response(201, json={"sid": "SM3"})
+
+    sender = TwilioSender("ACtest", "authtoken", "", "+14155550100", client=httpx.Client(transport=httpx.MockTransport(handler)), whatsapp_content_sid="HX123")
+    sender.send("whatsapp", "+919999999999", "this text must not be sent")
+    assert seen[0]["ContentSid"] == "HX123" and "Body" not in seen[0] and seen[0]["From"] == "whatsapp:+14155550100"
+    sender.send("sms", "+15125550000", "sms keeps the body")  # the template only applies to WhatsApp
+    assert seen[1]["Body"] == "sms keeps the body" and "ContentSid" not in seen[1]

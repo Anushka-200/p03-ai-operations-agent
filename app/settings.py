@@ -71,6 +71,7 @@ class Settings(BaseSettings):
     twilio_live: bool = False  # deliver QUEUED outbox rows through Twilio (needs DRY_RUN=false too)
     twilio_account_sid: str = ""
     twilio_sms_from: str = ""
+    twilio_whatsapp_content_sid: str = ""  # sandbox template (HX...) when free text is refused with 21654
     twilio_whatsapp_from: str = ""  # sandbox number, e.g. +14155238886
     twilio_allowed_to: str = ""  # comma-separated numbers we may text (your own verified phone)
 

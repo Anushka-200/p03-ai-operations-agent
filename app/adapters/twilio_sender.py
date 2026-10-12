@@ -27,22 +27,28 @@ API = "https://api.twilio.com/2010-04-01/Accounts"
 class TwilioSender:
     def __init__(
         self, account_sid: str, auth_token: str, sms_from: str, whatsapp_from: str = "",
-        client: httpx.Client | None = None, breaker: CircuitBreaker | None = None,
+        client: httpx.Client | None = None, breaker: CircuitBreaker | None = None, whatsapp_content_sid: str = "",
     ) -> None:  # fmt: skip
         self.sid, self._token, self.sms_from, self.whatsapp_from = account_sid, auth_token, sms_from, whatsapp_from
+        # A trial/sandbox account may refuse free text over the API (error 21654) and accept only an approved
+        # template. When set, WhatsApp sends use the template (its fixed text; our body is NOT sent).
+        self.whatsapp_content_sid = whatsapp_content_sid
         self.client = client or httpx.Client()
         self.breaker = breaker or CircuitBreaker("twilio")
 
     def send(self, channel: str, to: str, body: str) -> str:
         """Returns Twilio's MessageSid. WhatsApp numbers carry a 'whatsapp:' prefix on both ends."""
+        payload = {"Body": body}
         if channel == "whatsapp":
             frm, to = f"whatsapp:{self.whatsapp_from}", f"whatsapp:{to}"
+            if self.whatsapp_content_sid:
+                payload = {"ContentSid": self.whatsapp_content_sid}
         else:
             frm = self.sms_from
         resp = self.breaker.call(
             lambda: call(
                 self.client, "POST", f"{API}/{self.sid}/Messages.json", name="twilio", ok=(200, 201),
-                auth=(self.sid, self._token), data={"From": frm, "To": to, "Body": body},
+                auth=(self.sid, self._token), data={"From": frm, "To": to, **payload},
             )
         )  # fmt: skip
         return str(resp.json()["sid"])
