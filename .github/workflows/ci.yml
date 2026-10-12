@@ -40,5 +40,5 @@ jobs:
           uv run python -m app.db.migrate
           uv run python -c "from app.agent.run import setup_checkpointer; setup_checkpointer()"
       - run: uv run pytest -q
-      - name: Scenarios decided by code (emergency, STOP): real pipeline, no model, $0
+      - name: "Scenarios decided by code (emergency, STOP) - real pipeline, no model, $0"
         run: uv run python -m evals.run --rules-only --yes
