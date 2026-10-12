@@ -17,8 +17,8 @@ through `wsl.exe`.
       "command": "wsl.exe",
       "args": [
         "-d", "Ubuntu",
-        "--cd", "/home/anus11kulkarni/portfolio/p03-ai-operations-agent",
-        "--exec", "/home/anus11kulkarni/.local/bin/uv",
+        "--cd", "/home/<you>/portfolio/p03-ai-operations-agent",
+        "--exec", "/home/<you>/.local/bin/uv",
         "run", "python", "-m", "app.mcp_server"
       ]
     }
@@ -45,6 +45,6 @@ through `wsl.exe`.
 
 ## If it does not appear
 - Logs: Claude Desktop → Settings → Developer → open the log for `coolbreeze-ops`.
-- Run the same command in a Windows terminal: `wsl.exe -d Ubuntu --cd /home/anus11kulkarni/portfolio/p03-ai-operations-agent --exec /home/anus11kulkarni/.local/bin/uv run python -m app.mcp_server`. It should wait silently (it is waiting for a client). Press Ctrl+C.
+- Run the same command in a Windows terminal: `wsl.exe -d Ubuntu --cd /home/<you>/portfolio/p03-ai-operations-agent --exec /home/<you>/.local/bin/uv run python -m app.mcp_server`. It should wait silently (it is waiting for a client). Press Ctrl+C.
 - Check the distro name with `wsl.exe -l -q` (the config uses `Ubuntu`).
 - Postgres must be running on port 5435.

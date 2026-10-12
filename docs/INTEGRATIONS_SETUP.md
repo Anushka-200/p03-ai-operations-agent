@@ -32,7 +32,7 @@ Switches (leave all off until its check passes): `CALENDAR_BACKEND=fake|google`,
 7. Hover the new calendar > three dots > **Settings and sharing**.
    - **Share with specific people or groups > Add people** > paste the service-account e-mail > permission **Make changes to events** > Send.
    - Scroll to **Integrate calendar** > copy the **Calendar ID** (ends with `@group.calendar.google.com`).
-8. In `.env`: `GOOGLE_CREDENTIALS_FILE=/home/anus11kulkarni/secrets/p03-calendar.json` and `GOOGLE_CALENDAR_ID=<the id>`.
+8. In `.env`: `GOOGLE_CREDENTIALS_FILE=/home/<you>/secrets/p03-calendar.json` and `GOOGLE_CALENDAR_ID=<the id>`.
 9. Check: `uv run python -m scripts.live_integrations google` (read-only), then `... google --write` (creates and deletes ONE test event).
 10. Then in `.env`: `CALENDAR_BACKEND=google`.
 
