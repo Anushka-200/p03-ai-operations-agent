@@ -61,6 +61,7 @@ class FakeHubSpot:
         self.objs = {"contacts": {}, "deals": {}}
         self.calls: list[tuple[str, str]] = []
         self.down = False
+        self.search_blind = False  # True = HubSpot's search index lags: records just written are not found yet
         self.n = 0
 
     def __call__(self, req: httpx.Request) -> httpx.Response:
@@ -74,12 +75,16 @@ class FakeHubSpot:
         if req.method == "POST" and parts[-1] == "search":
             f = body["filterGroups"][0]["filters"][0]
             hits = [{"id": i, "properties": p} for i, p in self.objs[kind].items() if p.get(f["propertyName"]) == f["value"]]
+            if self.search_blind:
+                hits = []
             return httpx.Response(200, json={"results": hits[:1]})
         if req.method == "POST":
             self.n += 1
             self.objs[kind][str(self.n)] = body["properties"]
             return httpx.Response(201, json={"id": str(self.n)})
         if req.method == "PATCH":
+            if parts[4] not in self.objs[kind]:
+                return httpx.Response(404)
             self.objs[kind][parts[4]].update(body["properties"])
             return httpx.Response(200, json={"id": parts[4]})
         return httpx.Response(400)
@@ -377,3 +382,24 @@ def test_dry_run_rows_and_telegram_rows_are_never_sent_by_twilio(live_ctx):
     ctx.messaging.dry_run = False
     ctx.messaging.send(customer_id=None, channel="telegram", body="alert", idempotency_key="tw-tg", recipient="owner")
     assert deliver_outbox(ctx, twilio(lambda r: pytest.fail("must not call Twilio")), {"+15125550945"}) == {"sent": 0, "failed": 0, "blocked": 0, "deferred": 0}
+
+
+def test_hubspot_uses_the_stored_ids_so_a_lagging_search_index_cannot_create_duplicates():
+    """Regression: the first live run made duplicates because the second call searched right after creating."""
+    crm, server = hubspot()
+    server.search_blind = True
+    contact = crm.upsert_contact(CUSTOMER)
+    again = crm.upsert_contact({**CUSTOMER, "crm_contact_id": contact, "name": "Maria Q Lopez"})
+    deal = crm.upsert_deal(contact, BOOKING)
+    deal_again = crm.upsert_deal(contact, {**BOOKING, "crm_deal_id": deal, "status": "CANCELLED"})
+    assert contact == again and deal == deal_again
+    assert len(server.objs["contacts"]) == 1 and len(server.objs["deals"]) == 1
+    assert server.objs["contacts"][contact]["lastname"] == "Q Lopez" and server.objs["deals"][deal]["dealstage"] == "closedlost"
+
+
+def test_hubspot_falls_back_to_search_then_create_when_the_stored_id_no_longer_exists():
+    crm, server = hubspot()
+    contact = crm.upsert_contact({**CUSTOMER, "crm_contact_id": "424242"})  # deleted in HubSpot
+    assert contact != "424242" and len(server.objs["contacts"]) == 1
+    deal = crm.upsert_deal(contact, {**BOOKING, "crm_deal_id": "999"})
+    assert deal in server.objs["deals"] and len(server.objs["deals"]) == 1

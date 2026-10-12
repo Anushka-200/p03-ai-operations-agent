@@ -9,3 +9,9 @@ logs/
 # Claude's sealed estimates, revealed at each phase end
 .estimates_claude_view.json
 evals/results/
+
+# credentials must live outside the repo; this is only a safety net
+secrets/
+*service-account*.json
+*-calendar.json
+credentials*.json

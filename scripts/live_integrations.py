@@ -41,9 +41,13 @@ def hubspot(write: bool) -> None:
     s = get_settings()
     crm = HubSpotCrm(s.hubspot_token.get_secret_value(), dry_run=False)
     cust = {"id": 999001, "name": "P03 Livetest", "email": None, "address": "1 Test St", "zip": "78701", "crm_contact_id": None, "phone": "+15125550199"}
-    a, b = crm.upsert_contact(cust), crm.upsert_contact(cust)
+    # Like the app: the first call stores the id; the second call passes the stored id back (HubSpot's search
+    # index lags a few seconds, so a search right after creating would miss the record).
+    a = crm.upsert_contact(cust)
+    b = crm.upsert_contact({**cust, "crm_contact_id": a, "name": "P03 Livetest Renamed"})
     booking = {"id": 999001, "service": "ac_diagnostic", "start": datetime.now(UTC), "price": 89, "discount": 0, "status": "BOOKED"}
-    d1, d2 = crm.upsert_deal(a, booking), crm.upsert_deal(a, booking)
+    d1 = crm.upsert_deal(a, booking)
+    d2 = crm.upsert_deal(a, {**booking, "crm_deal_id": d1, "discount": 10})
     print("contact ids equal (no duplicate):", a == b, "| deal ids equal:", d1 == d2)
     print("delete the 'P03 Livetest' contact and deal in HubSpot afterwards if you want a clean account")
 

@@ -11,7 +11,7 @@ from typing import Any
 
 import httpx
 
-from app.adapters.http import call
+from app.adapters.http import AdapterRejected, call
 from app.adapters.resilience import CircuitBreaker, retry
 
 logger = logging.getLogger(__name__)
@@ -45,6 +45,16 @@ class HubSpotCrm:
         results = self._req("POST", f"/crm/v3/objects/{obj}/search", json=body).json().get("results", [])
         return str(results[0]["id"]) if results else None
 
+    def _patch_known(self, kind: str, object_id: str | None, props: dict[str, Any]) -> str | None:
+        """Update by the id we stored. None = no usable id (or HubSpot no longer has it): caller falls back to search."""
+        if not object_id:
+            return None
+        try:
+            self._req("PATCH", f"/crm/v3/objects/{kind}/{object_id}", json={"properties": props})
+        except AdapterRejected:  # e.g. 404: the record was deleted in HubSpot
+            return None
+        return object_id
+
     def upsert_contact(self, customer: dict[str, Any]) -> str:
         if self.dry_run:
             logger.info("crm dry-run: would upsert contact", extra={"customer_id": customer["id"]})
@@ -56,10 +66,15 @@ class HubSpotCrm:
         existing = customer.get("crm_contact_id")
         if existing and existing.startswith("dryrun-"):
             existing = None  # a placeholder from an earlier dry-run is not a real HubSpot id
-        existing = existing or (self._search("contacts", "phone", customer["phone"]) if customer.get("phone") else None)
-        if existing:
-            self._req("PATCH", f"/crm/v3/objects/contacts/{existing}", json={"properties": props})
-            return existing
+        # The id we stored is the reliable key. Search is only the fallback: HubSpot's search index lags a few
+        # seconds behind writes, so searching right after creating can miss the record and create a duplicate.
+        done = self._patch_known("contacts", existing, props)
+        if done:
+            return done
+        found = self._search("contacts", "phone", customer["phone"]) if customer.get("phone") else None
+        if found:
+            self._req("PATCH", f"/crm/v3/objects/contacts/{found}", json={"properties": props})
+            return found
         return str(self._req("POST", "/crm/v3/objects/contacts", json={"properties": props}).json()["id"])
 
     def upsert_deal(self, crm_contact_id: str, booking: dict[str, Any]) -> str:
@@ -70,7 +85,11 @@ class HubSpotCrm:
         price = float(booking["price"] or 0) * (1 - float(booking.get("discount") or 0) / 100)
         stage = "closedlost" if booking.get("status") == "CANCELLED" else "appointmentscheduled"
         props = {"dealname": name, "amount": f"{price:.2f}", "dealstage": stage, "pipeline": "default"}
-        existing = self._search("deals", "dealname", name)
+        known = booking.get("crm_deal_id")
+        done = self._patch_known("deals", None if (known or "").startswith("dryrun-") else known, props)
+        if done:
+            return done
+        existing = self._search("deals", "dealname", name)  # fallback only: the search index lags writes
         if existing:
             self._req("PATCH", f"/crm/v3/objects/deals/{existing}", json={"properties": props})
             return existing

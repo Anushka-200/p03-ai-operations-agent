@@ -242,3 +242,20 @@ def test_after_resume_the_agent_answers_that_customer_again(ctx):
     assert process_inbound(ctx, inbound("SM-h1"), "hello", agent)["route"] == "paused_handoff" and seen == []
     cases.clear_case(ctx, c.customer_id, "owner:test")
     assert process_inbound(ctx, inbound("SM-h2"), "hello", agent)["route"] == "agent" and seen == ["hello"]
+
+
+def test_a_contact_change_reaches_the_crm_even_when_the_contact_id_is_already_known(ctx):
+    """Regression: crm_sync skipped the contact update once crm_contact_id was stored."""
+    maria = make_customer(ctx, 1)
+    run_tool(ctx, maria, "update_my_contact", {"name": "Maria Lopez"})
+    assert crm_sync_run(ctx)["done"] >= 1
+    run_tool(ctx, maria, "update_my_contact", {"address": "9 New Rd"})
+    assert crm_sync_run(ctx)["done"] >= 1
+    key = f"crm-c-{maria.customer_id}"
+    assert ctx.crm.contacts[key]["address"] == "9 New Rd"
+
+
+def crm_sync_run(ctx):
+    from app import crm_sync
+
+    return crm_sync.process_outbox(ctx)

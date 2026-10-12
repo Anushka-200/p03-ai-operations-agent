@@ -35,22 +35,22 @@ def process_outbox(ctx: ToolContext, limit: int = 20) -> dict[str, int]:
             assert customer is not None
             cols = ("id", "name", "email", "address", "zip", "crm_contact_id", "phone")
             c = dict(zip(cols, customer, strict=True))
-            known = c["crm_contact_id"]
-            # "dryrun-..." is a placeholder from a dry-run, not a real CRM id: look the contact up properly.
-            contact_id = known if known and not known.startswith("dryrun-") else ctx.crm.upsert_contact(c)
+            # Always upsert: a changed name/address must reach the CRM even when we already know the contact id.
+            # The adapter updates by the stored id (a "dryrun-..." placeholder is ignored there).
+            contact_id = ctx.crm.upsert_contact(c)
             ctx.conn.execute(
                 "UPDATE customers SET crm_contact_id = %s WHERE id = %s", (contact_id, customer_id)
             )
             if kind == "upsert_deal":
                 b = ctx.conn.execute(
-                    "SELECT id, service_code, start_at, price_usd, discount_pct, status"
+                    "SELECT id, service_code, start_at, price_usd, discount_pct, status, crm_deal_id"
                     " FROM bookings WHERE id = %s",
                     (payload["booking_id"],),
                 ).fetchone()
                 assert b is not None
                 deal_id = ctx.crm.upsert_deal(
                     contact_id,
-                    dict(zip(("id", "service", "start", "price", "discount", "status"), b, strict=True)),
+                    dict(zip(("id", "service", "start", "price", "discount", "status", "crm_deal_id"), b, strict=True)),
                 )
                 ctx.conn.execute("UPDATE bookings SET crm_deal_id = %s WHERE id = %s", (deal_id, b[0]))
             ctx.conn.execute("UPDATE crm_outbox SET status = 'DONE' WHERE id = %s", (row_id,))
