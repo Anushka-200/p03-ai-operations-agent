@@ -13,8 +13,13 @@ MAX_ATTEMPTS = 5
 
 def enqueue(ctx: ToolContext, customer_id: int, kind: str, payload: dict | None = None) -> None:
     ctx.conn.execute(
-        "INSERT INTO crm_outbox (customer_id, kind, payload) VALUES (%s, %s, %s)",
-        (customer_id, kind, Jsonb(payload or {})),
+        "INSERT INTO crm_outbox (customer_id, kind, payload, next_attempt_at) VALUES (%s, %s, %s, %s)",
+        (
+            customer_id,
+            kind,
+            Jsonb(payload or {}),
+            ctx.now(),
+        ),  # the app's clock, not the database's: testable and consistent
     )
 
 

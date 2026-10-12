@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -41,7 +42,8 @@ def _run(coro_fn):
     _need_db()
     params = StdioServerParameters(
         command=sys.executable, args=["-m", "app.mcp_server"], cwd=str(ROOT),
-        env={"PHONE_HASH_KEY": "mcp-test-key"},
+        # the MCP client forwards only a minimal environment, so pass the database URLs on explicitly
+        env={"PHONE_HASH_KEY": "mcp-test-key", **{k: os.environ[k] for k in ("DATABASE_URL", "MIGRATOR_DATABASE_URL") if k in os.environ}},
     )  # fmt: skip
 
     async def main():
